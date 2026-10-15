@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#176b55">
+<title>Kamba Gestão — Finanças pessoais</title>
+<style>
+:root{--green:#176b55;--green2:#e7f4ee;--ink:#18221e;--muted:#65716b;--line:#e1e8e3;--bg:#f5f8f6;--white:#fff;--red:#b42318;--amber:#8a5b00}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--green);color:white;padding:22px max(18px,calc((100% - 1120px)/2));display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.brand{display:flex;gap:12px;align-items:center}.logo{width:44px;height:44px;border-radius:13px;background:#ffffff20;display:grid;place-items:center;font-size:23px}.brand h1{font-size:21px;margin:0}.brand p{margin:3px 0 0;font-size:12px;opacity:.85}
+main{max-width:1120px;margin:24px auto;padding:0 18px 40px}.topline{display:flex;justify-content:space-between;align-items:end;gap:14px;flex-wrap:wrap;margin-bottom:18px}.topline h2{margin:0;font-size:25px}.topline p{margin:5px 0 0;color:var(--muted);font-size:14px}
+input,select,button{font:inherit}input,select{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:white;color:var(--ink);min-width:0}label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px}.field{min-width:0}
+button{border:0;border-radius:10px;padding:11px 14px;cursor:pointer;font-weight:700}.primary{background:var(--green);color:white}.secondary{background:var(--green2);color:var(--green)}.danger{background:#fff0ef;color:var(--red)}.small{padding:7px 10px;font-size:12px}
+.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px}.card{background:white;border:1px solid var(--line);border-radius:16px;padding:17px;min-width:0}.card .label{font-size:12px;color:var(--muted);font-weight:700}.card .value{font-size:clamp(19px,2.4vw,27px);font-weight:800;margin-top:8px;overflow-wrap:anywhere}.card .hint{font-size:12px;color:var(--muted);margin-top:5px}
+.layout{display:grid;grid-template-columns:minmax(280px, .85fr) minmax(0,1.5fr);gap:16px;align-items:start}.panel{background:white;border:1px solid var(--line);border-radius:16px;padding:18px;min-width:0}.panel h3{margin:0 0 15px;font-size:17px}.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.wide{grid-column:1/-1}.type-toggle{display:flex;background:#f0f4f1;border-radius:11px;padding:4px;gap:4px;margin-bottom:14px}.type-toggle button{flex:1;background:transparent;color:var(--muted)}.type-toggle button.active{background:white;color:var(--green);box-shadow:0 1px 4px #00000012}.barwrap{height:8px;background:#edf1ee;border-radius:20px;overflow:hidden;margin-top:8px}.bar{height:100%;background:var(--green);border-radius:20px;width:0}.budget-item{padding:12px 0;border-bottom:1px solid var(--line)}.budget-item:last-child{border-bottom:0}.budget-head{display:flex;justify-content:space-between;gap:10px;font-size:13px}.budget-head strong{font-size:13px}.budget-head span{color:var(--muted);text-align:right}
+.filters{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:10px;margin-bottom:12px}.transactions{display:flex;flex-direction:column}.tx{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}.tx:last-child{border-bottom:0}.txicon{width:40px;height:40px;border-radius:12px;background:#f0f4f1;display:grid;place-items:center;flex-shrink:0}.txbody{flex:1;min-width:0}.txbody strong{display:block;font-size:14px;overflow-wrap:anywhere}.txbody small{color:var(--muted);font-size:12px}.txamount{font-weight:800;white-space:nowrap;font-size:13px}.income{color:var(--green)}.expense{color:var(--red)}.empty{padding:28px 8px;text-align:center;color:var(--muted);font-size:14px}.goalrow{display:flex;gap:10px;align-items:end}.goalrow .field{flex:1}.note{margin-top:16px;padding:12px 14px;border-radius:12px;background:#fff8e7;color:#77520b;font-size:12px;line-height:1.5}
+footer{max-width:1120px;margin:0 auto;padding:0 18px 25px;color:var(--muted);font-size:12px;line-height:1.6}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#18221e;color:white;padding:12px 16px;border-radius:10px;display:none;z-index:5;max-width:90vw;font-size:13px}
+@media(max-width:820px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.layout{grid-template-columns:1fr}}
+@media(max-width:480px){header{padding:17px}.brand h1{font-size:18px}main{margin-top:18px;padding:0 12px 28px}.cards{gap:8px}.card{padding:13px}.panel{padding:14px}.formgrid{grid-template-columns:1fr}.wide{grid-column:auto}.filters{grid-template-columns:1fr 1fr}.filters .field:first-child{grid-column:1/-1}.tx{gap:8px}.txamount{font-size:12px}.topline h2{font-size:22px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="logo">₭</div><div><h1>Kamba Gestão</h1><p>Organiza o teu dinheiro, passo a passo</p></div></div>
+  <button class="secondary" id="exportBtn">Exportar dados</button>
+</header>
+<main>
+  <div class="topline">
+    <div><h2>Visão geral</h2><p>O teu orçamento pessoal em kwanzas.</p></div>
+    <div class="field" style="width:190px"><label for="month">Mês em análise</label><input id="month" type="month"></div>
+  </div>
+  <section class="cards">
+    <div class="card"><div class="label">Saldo do mês</div><div class="value" id="balance">0 Kz</div><div class="hint">Receitas menos despesas</div></div>
+    <div class="card"><div class="label">Receitas</div><div class="value income" id="income">0 Kz</div><div class="hint">Entradas registadas</div></div>
+    <div class="card"><div class="label">Despesas</div><div class="value expense" id="expense">0 Kz</div><div class="hint">Saídas registadas</div></div>
+    <div class="card"><div class="label">Orçamento usado</div><div class="value" id="budgetUsed">—</div><div class="hint" id="budgetHint">Define os teus limites</div></div>
+  </section>
+  <div class="layout">
+    <section class="panel">
+      <h3>Adicionar movimento</h3>
+      <div class="type-toggle"><button type="button" id="expenseType" class="active">Despesa</button><button type="button" id="incomeType">Receita</button></div>
+      <form id="txForm">
+        <div class="formgrid">
+          <div class="field wide"><label for="description">Descrição</label><input id="description" required maxlength="80" placeholder="Ex.: Compras do supermercado"></div>
+          <div class="field"><label for="amount">Valor (Kz)</label><input id="amount" type="number" min="1" step="1" required placeholder="Ex.: 12500"></div>
+          <div class="field"><label for="date">Data</label><input id="date" type="date" required></div>
+          <div class="field wide"><label for="category">Categoria</label><select id="category"></select></div>
+          <div class="field wide"><button class="primary" style="width:100%" type="submit">Guardar movimento</button></div>
+        </div>
+      </form>
+      <div class="note"><strong>Privacidade:</strong> nesta versão, os dados ficam guardados neste navegador e neste dispositivo. Não introduzas PIN bancário, palavras-passe ou dados confidenciais.</div>
+      <div style="margin-top:22px"><h3>Meta de poupança</h3>
+        <form id="goalForm">
+          <div class="goalrow">
+            <div class="field"><label for="goal">Meta total (Kz)</label><input id="goal" type="number" min="0" step="1" placeholder="Ex.: 100000"></div>
+            <button class="secondary" type="submit">Guardar</button>
+          </div>
+        </form>
+        <div class="budget-head" style="margin-top:12px"><strong id="goalProgress">0 Kz poupados</strong><span id="goalTarget">Meta: 0 Kz</span></div>
+        <div class="barwrap"><div class="bar" id="goalBar"></div></div>
+      </div>
+      <div style="margin-top:24px"><h3>Orçamento por categoria</h3>
+        <form id="budgetForm">
+          <div class="formgrid">
+            <div class="field"><label for="budgetCategory">Categoria</label><select id="budgetCategory"></select></div>
+            <div class="field"><label for="budgetAmount">Limite mensal (Kz)</label><input id="budgetAmount" type="number" min="1" step="1" required placeholder="Ex.: 40000"></div>
+            <div class="field wide"><button class="secondary" style="width:100%" type="submit">Definir orçamento</button></div>
+          </div>
+        </form>
+        <div id="budgets"></div>
+      </div>
+    </section>
+    <section class="panel">
+      <h3>Movimentos</h3>
+      <div class="filters">
+        <div class="field"><label for="search">Pesquisar</label><input id="search" placeholder="Descrição..."></div>
+        <div class="field"><label for="filterType">Tipo</label><select id="filterType"><option value="all">Todos</option><option value="expense">Despesas</option><option value="income">Receitas</option></select></div>
+        <div class="field"><label for="filterCategory">Categoria</label><select id="filterCategory"><option value="all">Todas</option></select></div>
+      </div>
+      <div id="transactions" class="transactions"></div>
+      <div style="display:flex;justify-content:space-between;gap:8px;margin-top:16px;flex-wrap:wrap">
+        <button class="secondary" id="demoBtn">Carregar exemplo</button>
+        <button class="danger" id="clearBtn">Apagar todos os dados</button>
+      </div>
+    </section>
+  </div>
+</main>
+<footer>Kamba Gestão — protótipo inicial. Os cálculos servem para organização pessoal e não constituem aconselhamento financeiro, contabilístico ou fiscal. Exporta uma cópia dos teus dados regularmente.</footer>
+<div class="toast" id="toast" role="status"></div>
+<script>
+(() => {
+ const CATS = {
+  expense:["Alimentação","Habitação","Transporte","Saúde","Educação","Internet e telefone","Lazer","Família","Dívidas","Outros"],
+  income:["Salário","Negócio","Serviços","Investimentos","Apoio familiar","Outros"]
+ };
+ const KEY="kamba_gestao_v1";
+ let state={transactions:[],budgets:{},goal:0};
+ let txType="expense";
+ const $=id=>document.getElementById(id);
+ const today=new Date();
+ const localDate=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+ const currentMonth=()=>localDate(today).slice(0,7);
+ const money=n=>new Intl.NumberFormat("pt-PT",{maximumFractionDigits:0}).format(n)+" Kz";
+ const escapeHTML=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+ function toast(msg){const t=$("toast");t.textContent=msg;t.style.display="block";setTimeout(()=>t.style.display="none",2600)}
+ function save(){localStorage.setItem(KEY,JSON.stringify(state))}
+ function load(){try{const raw=localStorage.getItem(KEY);if(raw){const s=JSON.parse(raw);if(s&&Array.isArray(s.transactions))state={transactions:s.transactions,budgets:s.budgets||{},goal:Number(s.goal)||0}}}catch(e){toast("Não foi possível ler os dados guardados.")}}
+ function populateCats(){
+  $("category").innerHTML=CATS[txType].map(c=>`<option>${escapeHTML(c)}</option>`).join("");
+  const all=[...CATS.expense,...CATS.income];
+  $("budgetCategory").innerHTML=CATS.expense.map(c=>`<option>${escapeHTML(c)}</option>`).join("");
+  $("filterCategory").innerHTML='<option value="all">Todas</option>'+all.map(c=>`<option>${escapeHTML(c)}</option>`).join("");
+ }
+ function monthTx(){const m=$("month").value;return state.transactions.filter(t=>t.date.slice(0,7)===m)}
+ function render(){
+  const tx=monthTx(), inc=tx.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0), exp=tx.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
+  $("balance").textContent=money(inc-exp);$("income").textContent=money(inc);$("expense").textContent=money(exp);
+  const totalBudget=Object.values(state.budgets).reduce((s,n)=>s+Number(n||0),0);
+  $("budgetUsed").textContent=totalBudget?Math.min(999,Math.round(exp/totalBudget*100))+"%":"—";
+  $("budgetHint").textContent=totalBudget?`${money(exp)} gastos de ${money(totalBudget)} definidos`:"Define os teus limites";
+  const search=$("search").value.toLocaleLowerCase("pt"), ft=$("filterType").value, fc=$("filterCategory").value;
+  const filtered=tx.slice().filter(t=>(t.description+" "+t.category).toLocaleLowerCase("pt").includes(search)&&(ft==="all"||t.type===ft)&&(fc==="all"||t.category===fc)).sort((a,b)=>b.date.localeCompare(a.date)||b.created-b.created);
+  $("transactions").innerHTML=filtered.length?filtered.map(t=>`<div class="tx"><div class="txicon">${t.type==="income"?"↙":"↗"}</div><div class="txbody"><strong>${escapeHTML(t.description)}</strong><small>${escapeHTML(t.category)} · ${t.date.split("-").reverse().join("/")}</small></div><div class="txamount ${t.type}">${t.type==="income"?"+":"−"} ${money(t.amount)}<div style="text-align:right;margin-top:5px"><button class="danger small" data-delete="${t.id}" aria-label="Apagar movimento">Apagar</button></div></div></div>`).join(""):'<div class="empty">Ainda não há movimentos para este mês e filtros. Adiciona um movimento ou carrega os dados de exemplo.</div>';
+  const budgetEntries=Object.entries(state.budgets);
+  $("budgets").innerHTML=budgetEntries.length?budgetEntries.map(([cat,lim])=>{const spent=tx.filter(t=>t.type==="expense"&&t.category===cat).reduce((s,t)=>s+t.amount,0);const pct=Math.round(spent/lim*100);return `<div class="budget-item"><div class="budget-head"><strong>${escapeHTML(cat)}</strong><span>${money(spent)} / ${money(lim)}</span></div><div class="barwrap"><div class="bar" style="width:${Math.min(100,pct)}%;background:${pct>100?'#b42318':'var(--green)'}"></div></div><div style="display:flex;justify-content:space-between;margin-top:5px;color:var(--muted);font-size:11px"><span>${pct}% utilizado</span><button class="danger small" data-budget-delete="${escapeHTML(cat)}">Remover</button></div></div>`}).join(""):'<div class="empty">Ainda não definiste limites mensais.</div>';
+  const saved=state.transactions.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0)-state.transactions.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
+  $("goalProgress").textContent=money(Math.max(0,saved))+" poupados (estimativa)";$("goalTarget").textContent="Meta: "+money(state.goal);
+  $("goalBar").style.width=state.goal?Math.min(100,Math.max(0,saved)/state.goal*100)+"%":"0%";
+  $("goalBar").style.background=state.goal&&saved>=state.goal?"#176b55":"";
+ }
+ function setType(type){txType=type;$("expenseType").classList.toggle("active",type==="expense");$("incomeType").classList.toggle("active",type==="income");populateCats()}
+ $("expenseType").addEventListener("click",()=>setType("expense"));$("incomeType").addEventListener("click",()=>setType("income"));
+ $("txForm").addEventListener("submit",e=>{e.preventDefault();const desc=$("description").value.trim(),amount=Number($("amount").value),date=$("date").value;if(!desc||!Number.isFinite(amount)||amount<=0||!date){toast("Confirma a descrição, o valor e a data.");return}state.transactions.push({id:crypto.randomUUID?crypto.randomUUID():String(Date.now()+Math.random()),description:desc,amount:Math.round(amount),date,category:$("category").value,type:txType,created:Date.now()});save();$("description").value="";$("amount").value="";$("month").value=date.slice(0,7);render();toast("Movimento guardado.")});
+ $("budgetForm").addEventListener("submit",e=>{e.preventDefault();const cat=$("budgetCategory").value,n=Number($("budgetAmount").value);if(!Number.isFinite(n)||n<=0){toast("Introduz um limite maior que zero.");return}state.budgets[cat]=Math.round(n);save();$("budgetAmount").value="";render();toast("Orçamento atualizado.")});
+ $("goalForm").addEventListener("submit",e=>{e.preventDefault();state.goal=Math.max(0,Math.round(Number($("goal").value)||0));save();render();toast("Meta de poupança guardada.")});
+ ["month","search","filterType","filterCategory"].forEach(id=>$(id).addEventListener(id==="month"?"change":"input",render));
+ $("transactions").addEventListener("click",e=>{const b=e.target.closest("[data-delete]");if(b&&confirm("Queres apagar este movimento?")){state.transactions=state.transactions.filter(t=>t.id!==b.dataset.delete);save();render();toast("Movimento apagado.")}});
+ $("budgets").addEventListener("click",e=>{const b=e.target.closest("[data-budget-delete]");if(b){delete state.budgets[b.dataset.budgetDelete];save();render();toast("Orçamento removido.")}});
+ $("exportBtn").addEventListener("click",()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="kamba-gestao-backup.json";a.click();URL.revokeObjectURL(url);toast("Cópia de segurança exportada.")});
+ $("clearBtn").addEventListener("click",()=>{if(confirm("Isto apagará todos os movimentos, orçamentos e metas guardados neste navegador. Continuar?")){state={transactions:[],budgets:{},goal:0};save();render();toast("Dados apagados.")}});
+ $("demoBtn").addEventListener("click",()=>{if(state.transactions.length&&!confirm("Adicionar exemplos aos movimentos existentes?"))return;const m=$("month").value||currentMonth();const d=day=>`${m}-${String(day).padStart(2,"0")}`;state.transactions.push({id:String(Date.now())+"a",description:"Salário",amount:250000,date:d(1),category:"Salário",type:"income",created:Date.now()},{id:String(Date.now())+"b",description:"Compras de casa",amount:42000,date:d(3),category:"Alimentação",type:"expense",created:Date.now()+1},{id:String(Date.now())+"c",description:"Transporte",amount:18000,date:d(5),category:"Transporte",type:"expense",created:Date.now()+2},{id:String(Date.now())+"d",description:"Internet e telefone",amount:12000,date:d(7),category:"Internet e telefone",type:"expense",created:Date.now()+3});state.budgets["Alimentação"]=50000;state.budgets["Transporte"]=25000;if(!state.goal)state.goal=100000;save();render();toast("Exemplos adicionados. Podes apagá-los quando quiseres.")});
+ load();$("month").value=currentMonth();$("date").value=localDate(today);$("goal").value=state.goal||"";populateCats();render();
+})();
+</script>
+</body>
+</html>
