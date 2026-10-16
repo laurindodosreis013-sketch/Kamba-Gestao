@@ -78,7 +78,7 @@ const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;
 let user=null,WS={};
 const $=s=>document.querySelector(s),A=$("#app");
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const money=n=>new Intl.NumberFormat("pt-PT",{maximumFractionDigits:0}).format(Math.round(n))+" Kz";
+const money=n=>new Intl.NumberFormat("pt-PT",{maximumFractionDigits:0,useGrouping:"always"}).format(Math.round(n))+" Kz";
 const ld=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 const sum=(a,f)=>a.reduce((s,x)=>s+f(x),0),fd=d=>d.split("-").reverse().join("/");
 const uid=()=>crypto.randomUUID?crypto.randomUUID():Date.now()+""+Math.random();
