@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b2a5b">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Kamba"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <title>Kamba Gestão</title>
 <style>
@@ -65,18 +69,19 @@ textarea{width:100%;border:1px solid var(--ln);border-radius:10px;padding:11px 1
 #md{position:fixed;inset:0;background:rgba(5,15,30,.6);display:grid;place-items:center;z-index:30;padding:16px}#md[hidden]{display:none}
 .mbox{background:var(--wh);color:var(--ink);border-radius:20px;padding:20px;max-width:460px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)}.mbox ol{padding-left:18px;font-size:13px;line-height:1.6;margin:12px 0}
 @media print{#md{display:none!important}}
+.net{font-size:11px;margin-right:4px}#upd{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;background:var(--bl);color:#fff;padding:10px 14px;display:flex;gap:10px;align-items:center;justify-content:center;z-index:40;font-size:13px}
 </style>
 </head>
 <body>
 <div id="app"></div>
 <div class="toast" id="toast" role="status"></div>
 <div id="pv" hidden></div><div id="tv" hidden></div><div id="md" hidden></div>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
 <script>
 (()=>{
 const SB_URL="https://cqbvwjtgilnsnnplnbbr.supabase.co",SB_KEY="sb_publishable_IST8t394Xz3XF0pAAP-Xig_c3OPhqWd";
 const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;
+let SYNCING=0,PENDING=false,OFFV=false,DEFERRED=null,UPDW=null,UPD=false;
 let user=null,WS={},SUBS=[],PL={},HAS={personal:false,business:false},ENT={personal:false,business:false};
 const $=s=>document.querySelector(s),A=$("#app");
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -97,7 +102,7 @@ const ICO={"Alimentação":"🛒","Habitação":"🏠","Transporte":"🚗","Saú
 Object.assign(ICO,{"Cursos e formação":"📚","Restaurantes e takeaway": "🍽️", "Água": "💧", "Gás": "🔥", "Gerador e combustível": "⛽", "Recargas e dados móveis": "📱", "Casa e reparações": "🛠️", "Mobília e eletrodomésticos": "🛋️", "Empregada doméstica": "🧹", "Combustível": "⛽", "Táxi e candongueiro": "🚕", "Manutenção do carro": "🔧", "Seguros": "🛡️", "Medicamentos": "💊", "Consultas e exames": "🩺", "Propinas": "🎓", "Material escolar": "✏️", "Filhos": "🧒", "Apoio a familiares": "🤝", "Vestuário e calçado": "👕", "Cuidados pessoais": "💇", "Viagens": "✈️", "Assinaturas e TV": "📺", "Presentes e donativos": "🎁", "Animais de estimação": "🐾", "Impostos e taxas": "🏛️", "Poupança e investimentos": "🐷", "Empréstimos e prestações": "💳", "Pensão": "👴", "Bónus e comissões": "🏆", "Venda de bens": "🏷️", "Juros": "📈", "Reembolsos": "↩️", "Presentes recebidos": "🎁", "Telefone e dados": "📞", "Matéria-prima e consumíveis": "🧴", "Embalagens": "📦", "Publicidade e marketing": "📣", "Software e subscrições": "💻", "Contabilidade e serviços": "🧮", "Taxas bancárias": "🏦", "Licenças e alvarás": "📜", "Limpeza": "🧽", "Material de escritório": "🖇️", "Equipamentos": "🖨️", "Entregas e fretes": "🚚", "Comissões": "🏷️", "Formação": "📚", "Segurança": "🔒", "Outros": "🧾"});
 let mode=null,S,month=ld(new Date()).slice(0,7),tab="sales",fl={q:"",t:"all"},ed=null;
 function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display="none",2600)}
-const save=()=>{wr("kamba_v2_"+mode,S);if(sb&&user&&WS[mode]){clearTimeout(save.h);const m=mode,snap=S;save.h=setTimeout(async()=>{const r=await sb.from("app_state").upsert({workspace_id:WS[m],data:snap,updated_at:new Date().toISOString()});if(r.error)toast("Não foi possível sincronizar: "+r.error.message)},600)}};
+const save=()=>{wr("kamba_v2_"+mode,S);if(sb&&user&&WS[mode]){clearTimeout(save.h);const m=mode,snap=S;save.h=setTimeout(async()=>{if(!navigator.onLine){PENDING=true;return}SYNCING++;netUI();const r=await sb.from("app_state").upsert({workspace_id:WS[m],data:snap,updated_at:new Date().toISOString()});SYNCING--;netUI();if(r.error)toast("Não foi possível sincronizar: "+r.error.message)},600)}};
 const th=rd("kamba_v2_theme");if(th)document.documentElement.dataset.theme=th;
 
 const price=c=>{const p=PL[c];return p&&p.active&&p.price?money(p.price)+(p.period_months===12?" por ano":" / "+p.period_months+" meses"):"Preço por definir"};
@@ -105,7 +110,7 @@ const PLN=c=>(PL[c]&&PL[c].name)||c;
 function gate(){
  mode=null;
  const has=m=>!!WS[m];
- A.innerHTML=`<div class="gate"><div class="logo">₭</div><h1>Kamba Gestão</h1><p class="mu">Como vais usar a aplicação?</p><p class="mu">${esc(user.email)} · <button class="secondary small" data-a="out">Sair</button> <button class="secondary small" data-a="plano">Plano e pagamentos</button></p>
+ A.innerHTML=`<div class="gate"><div class="logo">₭</div><h1>Kamba Gestão</h1><p class="mu">Como vais usar a aplicação?</p><p><span class="net st ok" role="status" aria-live="polite"></span></p><p class="mu">${esc(user.email)} · <button class="secondary small" data-a="out">Sair</button> <button class="secondary small" data-a="inst">Instalar a aplicação</button> <button class="secondary small" data-a="plano">Plano e pagamentos</button></p>
  <div class="modes">
  <button class="mode" data-a="mode" data-m="personal"><span class="ico" aria-hidden="true">🏠</span><strong>Particular / Família</strong><small>Receitas, despesas, orçamento e metas de poupança do dia a dia.</small><span class="pr">${price("personal")}</span>${HAS.personal?"":"<em>🔒 Requer o plano</em>"}${has("personal")?"<em>Tem dados guardados</em>":""}</button>
  <button class="mode" data-a="mode" data-m="business"><span class="ico" aria-hidden="true">🏪</span><strong>Empresarial</strong><small>Vendas, caixa, stock, contas a receber e resultado estimado.</small><span class="pr">${price("business")}</span>${HAS.business?"":"<em>🔒 Requer o plano</em>"}${has("business")?"<em>Tem dados guardados</em>":""}</button>
@@ -125,7 +130,7 @@ async function enter(m){
 }
 function shell(){
  A.innerHTML=`<header><div class="brand"><div class="logo">₭</div><div><h1>Kamba Gestão</h1><p>${mode==="personal"?"Particular / Família":"Empresarial"}</p></div></div>
- <div class="hb"><button class="secondary small" data-a="theme">Tema</button><button class="secondary small" data-a="mydocs">Documentos</button><button class="secondary small" data-a="exp">Exportar</button><button class="secondary small" data-a="sw">Trocar modo</button></div></header>
+ <div class="hb"><span class="net st ok" role="status" aria-live="polite"></span><button class="secondary small" data-a="theme">Tema</button><button class="secondary small" data-a="mydocs">Documentos</button><button class="secondary small" data-a="exp">Exportar</button><button class="secondary small" data-a="sw">Trocar modo</button></div></header>
  <main><button class="fab" data-a="fab">+ Nova transação</button><div id="fabm"></div><div class="topline"><h2>Visão geral</h2><div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap"><button class="secondary" data-a="cust">Personalizar painel</button><div class="field" style="width:190px"><label for="month">Mês em análise</label><input id="month" type="month" value="${month}"></div></div></div><div id="cust"></div>
  <div id="cards" class="cards"></div><div id="alerts"></div><div id="charts" class="charts"></div><div id="body"></div></main>
  <footer>${mode==="personal"?"Os cálculos servem para organização pessoal e não constituem aconselhamento financeiro.":"Documentos e valores são de gestão interna, não são faturas fiscais válidas em Angola. O saldo de caixa conta o recebido pelo mês da venda e não inclui compras de stock. O resultado estimado usa o custo dos produtos vendidos."} Exporta uma cópia dos dados regularmente.</footer>`;
@@ -191,7 +196,7 @@ function cards(){
  KEYS.cards=CK.map(x=>x[0]);$("#cards").innerHTML=applyPrefs(CK);
 }
 function alerts(){
- const a=[];if(!ENT[mode])a.push(["bad","Subscrição inativa: só consulta e exportação. As alterações não são guardadas. Renova em «Plano e pagamentos»."]);
+ const a=[];if(!navigator.onLine)a.push(["warn","Estás offline: as alterações ficam só neste dispositivo e são enviadas quando a ligação voltar."]);if(!ENT[mode])a.push(["bad","Subscrição inativa: só consulta e exportação. As alterações não são guardadas. Renova em «Plano e pagamentos»."]);
  if(mode==="personal"){const m=mtx();Object.entries(S.bud).forEach(([k,l])=>{const p=sum(m.filter(t=>t.type==="expense"&&t.cat===k),t=>t.amt)/l*100;
   if(p>100)a.push(["bad",`Ultrapassaste o limite de ${k} (${Math.round(p)}%). Considera rever o orçamento.`]);else if(p>=80)a.push(["warn",`Estás perto do limite de ${k} (${Math.round(p)}%).`])})}
  else{S.prod.filter(p=>p.stock<=p.min).forEach(p=>a.push(["warn",`Stock baixo: ${p.name} (${p.stock} em stock, mínimo ${p.min}).`]));
@@ -301,11 +306,12 @@ function tblOpen(){TB.ds=mode==="personal"?"tx":(tab==="sales"?"sales":tab);TB.q
  $("#tv").innerHTML=`<div style="max-width:1120px;margin:0 auto"><div class="topline"><h2>${esc(d.t)}</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="secondary" data-a="texp" data-id="csv">CSV</button><button class="secondary" data-a="texp" data-id="xlsx">Excel</button><button class="secondary" data-a="texp" data-id="pdf">PDF</button><button class="primary" data-a="tclose">Fechar</button></div></div>
  <div class="tf"><div class="field"><label for="tq">Pesquisar</label><input id="tq" autocomplete="off"></div><div class="field"><label for="tsc">Período</label><select id="tsc" ${d.date?"":"disabled"}><option value="month">Mês em análise</option><option value="all">Tudo</option></select></div><div class="field"><label for="tsz">Linhas por página</label><select id="tsz"><option>10</option><option selected>20</option><option>50</option></select></div><button class="secondary" data-a="tcp">Colunas</button></div><div id="tvb"></div></div>`;
  $("#tsc").value=TB.scope;$("#tv").hidden=false;tblView()}
+function loadXlsx(){return window.XLSX?Promise.resolve():new Promise((res,rej)=>{const e=document.createElement("script");e.src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";e.onload=res;e.onerror=()=>rej(new Error("offline"));document.head.appendChild(e)})}
 const dl=(b,n)=>{const u=URL.createObjectURL(b),l=document.createElement("a");l.href=u;l.download=n;l.click();URL.revokeObjectURL(u)};
 function texp(kind){const{d,vis,rows}=tblData(),H=vis.map(c=>c[1]),R=rows.map(r=>vis.map(c=>c[2](r)));
  if(!rows.length)return toast("Não há registos para exportar.");
  if(kind==="pdf")return showDoc(`<div style="font-family:Arial,sans-serif;font-size:12px"><h2>${esc(d.t)}</h2><p>Gerado em ${fd(ld(new Date()))} · ${rows.length} registos</p><table style="width:100%;border-collapse:collapse"><tr>${vis.map(c=>`<th align="${c[4]?"right":"left"}" style="padding:6px;background:#eee">${esc(c[1])}</th>`).join("")}</tr>${rows.map(r=>`<tr>${vis.map(c=>`<td align="${c[4]?"right":"left"}" style="padding:5px;border-bottom:1px solid #ddd">${tcell(r,c)}</td>`).join("")}</tr>`).join("")}</table></div>`);
- if(kind==="xlsx"){if(!window.XLSX)return toast("A biblioteca Excel não carregou. Usa o CSV.");const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([H,...R]),"Dados");return XLSX.writeFile(wb,"kamba-"+TB.ds+".xlsx")}
+ if(kind==="xlsx")return loadXlsx().then(()=>{const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([H,...R]),"Dados");XLSX.writeFile(wb,"kamba-"+TB.ds+".xlsx")}).catch(()=>toast("Não foi possível carregar o exportador de Excel (precisa de internet na primeira vez). Usa o CSV."));
  const cell=v=>{if(typeof v==="number")return String(v);let t=String(v==null?"":v);if(/^[=+\-@\t\r]/.test(t))t="'"+t;return '"'+t.replace(/"/g,'""')+'"'};
  dl(new Blob(["\ufeff"+[H,...R].map(r=>r.map(cell).join(";")).join("\r\n")],{type:"text/csv;charset=utf-8"}),"kamba-"+TB.ds+".csv")}
 const PST={pending:"Pendente",awaiting:"A aguardar confirmação",confirmed:"Pago",rejected:"Rejeitado",expired:"Expirado",cancelled:"Cancelado",refunded:"Reembolsado",processing:"Em processamento",failed:"Falhado"};
@@ -537,6 +543,10 @@ document.addEventListener("click",e=>{
  if(a==="asave"){sb.rpc("admin_save_plan",{p_code:id,p_name:$("#pn_"+id).value,p_price:$("#pp_"+id).value?+$("#pp_"+id).value:null,p_months:+$("#pm_"+id).value,p_active:$("#pa_"+id).checked}).then(r=>{toast(r.error?r.error.message:"Plano guardado.");if(!r.error)padm()});return}
  if(a==="aproof"){sb.storage.from("comprovativos").createSignedUrl(id,60).then(u=>u.error?toast("Não foi possível abrir o comprovativo."):window.open(u.data.signedUrl,"_blank","noopener"));return}
  if(a==="ares"){const st2=b.dataset.s,tx={confirmed:"Confirmas que o dinheiro já entrou na conta bancária?",rejected:"Rejeitar este pagamento?",refunded:"Marcar como reembolsado?"}[st2];if(!confirm(tx))return;const note=prompt("Nota (opcional):")||null;sb.rpc("admin_resolve",{p_id:id,p_status:st2,p_note:note}).then(r=>{toast(r.error?r.error.message:"Atualizado.");padm()});return}
+ if(a==="retry")return init();
+ if(a==="inst")return instOpen();
+ if(a==="instgo"){if(DEFERRED){DEFERRED.prompt();DEFERRED.userChoice.then(()=>{DEFERRED=null;$("#md").hidden=true;$("#md").innerHTML=""})}return}
+ if(a==="doupd"){UPD=true;if(UPDW)UPDW.postMessage("SKIP_WAITING");return}
  if(a==="plano")return payOpen();
  if(a==="mydocs")return docsOpen();
  if(a==="mfretry")return docsLoad();
@@ -613,7 +623,7 @@ document.addEventListener("click",e=>{
 });
 function authView(msg){A.innerHTML=`<div class="gate"><div class="logo">₭</div><h1>Kamba Gestão</h1><p class="mu">Entra ou cria a tua conta</p>
 <form data-f="auth" class="panel" style="max-width:380px;margin:22px auto;text-align:left"><div class="field"><label for="em">E-mail</label><input id="em" type="email" autocomplete="email" required></div><div class="field" style="margin-top:12px"><label for="pw">Palavra-passe (mínimo 8 caracteres)</label><input id="pw" type="password" autocomplete="current-password" minlength="8" required></div>
-<div class="row2"><button class="primary" style="flex:1">Entrar</button><button class="secondary" style="flex:1" type="button" data-a="signup">Criar conta</button></div><div class="row2"><button type="button" class="secondary small" data-a="reset">Esqueci a palavra-passe</button></div>${msg?`<div class="al warn" style="margin-top:12px" role="alert">${esc(msg)}</div>`:""}</form></div>`}
+<div class="row2"><button class="primary" style="flex:1">Entrar</button><button class="secondary" style="flex:1" type="button" data-a="signup">Criar conta</button></div><div class="row2"><button type="button" class="secondary small" data-a="reset">Esqueci a palavra-passe</button></div>${msg?`<div class="al warn" style="margin-top:12px" role="alert">${esc(msg)}</div>`:""}</form><p><span class="net st ok" role="status" aria-live="polite"></span> <button class="secondary small" type="button" data-a="inst">Como instalar a aplicação</button></p></div>`}
 async function doAuth(k){
  const email=$("#em").value.trim(),password=$("#pw").value;if(!email||password.length<8)return authView("Indica um e-mail válido e uma palavra-passe com pelo menos 8 caracteres.");
  const r=k==="login"?await sb.auth.signInWithPassword({email,password}):await sb.auth.signUp({email,password,options:{emailRedirectTo:location.href.split("#")[0]}});
@@ -622,10 +632,32 @@ async function doAuth(k){
  await start(r.data.session)}
 async function loadPlans(){const r=await sb.from("plans").select("*");PL={};(r.data||[]).forEach(p=>PL[p.code]=p)}
 function entCalc(){const td=ld(new Date());for(const k of["personal","business"]){const rows=SUBS.filter(x=>x.plan===k||x.plan==="combo");HAS[k]=rows.length>0;ENT[k]=rows.some(x=>["active","trial"].includes(x.status)&&(!x.expires_at||x.expires_at>=td))}}
-async function start(session){user=session.user;WS={};const[w,sp]=await Promise.all([sb.from("workspaces").select("id,kind"),sb.from("subscriptions").select("*"),loadPlans()]);(w.data||[]).forEach(x=>{if(!WS[x.kind])WS[x.kind]=x.id});SUBS=sp.data||[];entCalc();gate()}
-(async()=>{if(!sb){A.innerHTML='<div class="gate"><div class="al bad">Não foi possível carregar a ligação à base de dados. Verifica a internet e recarrega a página.</div></div>';return}
- sb.auth.onAuthStateChange(ev=>{if(ev==="PASSWORD_RECOVERY")setTimeout(async()=>{const p=prompt("Nova palavra-passe (mínimo 8 caracteres):");if(p&&p.length>=8){const r=await sb.auth.updateUser({password:p});toast(r.error?r.error.message:"Palavra-passe atualizada.")}},300)});
- const{data}=await sb.auth.getSession();data.session?await start(data.session):authView()})();
+async function start(session){user=session.user;WS={};const[w,sp]=await Promise.all([sb.from("workspaces").select("id,kind"),sb.from("subscriptions").select("*"),loadPlans()]);if(w.error&&/fetch|network|load failed/i.test(w.error.message||""))return offlineView();(w.data||[]).forEach(x=>{if(!WS[x.kind])WS[x.kind]=x.id});SUBS=sp.data||[];entCalc();gate()}
+function offlineView(){OFFV=true;mode=null;A.innerHTML=`<div class="gate"><div class="logo">₭</div><h1>Kamba Gestão</h1><p><span class="net st w" role="status" aria-live="polite"></span></p><div class="note" style="text-align:center;margin-top:18px"><strong>Sem ligação à internet.</strong><br>A aplicação abriu, mas para ver os teus dados financeiros é preciso ligares-te à internet. A consulta e o registo offline desses dados só serão ativados quando existir armazenamento local protegido (próxima fase), para não deixar informação financeira desprotegida neste dispositivo.</div><button class="primary" data-a="retry" style="margin-top:16px">Tentar de novo</button> <button class="secondary" data-a="inst" style="margin-top:16px">Como instalar a aplicação</button></div>`}
+const netTxt=()=>!navigator.onLine?["Offline","w"]:SYNCING>0?["A sincronizar...","w"]:["Online","ok"];
+function netUI(){const[t,c]=netTxt();document.querySelectorAll(".net").forEach(e=>{e.textContent="● "+t;e.className="net st "+c})}
+function instOpen(){const ios=/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1),std=(window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||navigator.standalone,ctl="serviceWorker" in navigator&&!!navigator.serviceWorker.controller;
+ const m=$("#md");m.hidden=false;
+ m.innerHTML=`<div class="mbox" role="dialog" aria-modal="true" aria-label="Instalar a aplicação"><div style="display:flex;gap:12px;align-items:center">${LOGO}<div><h3 style="margin:0">Instalar o Kamba Gestão</h3><div class="mu" style="font-size:13px">${std?"Já está instalada neste dispositivo.":"Abre como uma aplicação, sem o navegador."}</div></div></div>
+ ${DEFERRED&&!std?'<button class="primary full" style="margin-top:14px" data-a="instgo">Instalar agora</button>':""}
+ <ol><li><strong>Android (Chrome):</strong> menu ⋮ e «Instalar aplicação» ou «Adicionar ao ecrã principal».</li><li><strong>iPhone e iPad (Safari):</strong> botão Partilhar e «Adicionar ao ecrã principal»${ios?" (é o teu caso)":""}.</li><li><strong>Computador (Chrome ou Edge):</strong> ícone de instalar na barra de endereço, ou menu e «Instalar Kamba Gestão».</li></ol>
+ <p style="font-size:13px"><strong>Ficheiros da aplicação guardados para abrir sem internet:</strong> ${ctl?"sim":"ainda não (abre a aplicação uma vez com internet e recarrega)"}</p>
+ <div class="note" style="margin:0 0 12px"><strong>Limitações:</strong> só abre sem internet depois de ser aberta uma vez com internet. Os teus dados financeiros ainda <strong>não</strong> ficam disponíveis offline: isso depende de armazenamento local protegido (próxima fase). Pagamentos, recuperação de conta e alterações de segurança exigem sempre internet. O suporte varia com o navegador e o dispositivo (por exemplo, o iPhone pode apagar dados de sites pouco usados).</div>
+ <button class="secondary full" data-a="mclose">Fechar</button></div>`}
+function updBanner(w){UPDW=w;if($("#upd"))return;const b=document.createElement("div");b.id="upd";b.setAttribute("role","status");b.innerHTML='Nova versão disponível. <button class="secondary small" data-a="doupd">Atualizar agora</button>';document.body.appendChild(b)}
+async function init(){OFFV=false;
+ if(!sb){A.innerHTML='<div class="gate"><div class="al bad">Não foi possível carregar a ligação à base de dados. Verifica a internet e recarrega a página.</div></div>';return}
+ if(!navigator.onLine)return offlineView();
+ let ses=null;try{ses=(await sb.auth.getSession()).data.session}catch(e){return offlineView()}
+ ses?await start(ses):authView()}
+new MutationObserver(netUI).observe(A,{childList:true});
+window.addEventListener("online",()=>{netUI();if(OFFV)return init();if(mode){if(PENDING){PENDING=false;save()}update();toast("Ligação reposta.")}});
+window.addEventListener("offline",()=>{netUI();if(mode)update()});
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();DEFERRED=e});
+window.addEventListener("appinstalled",()=>{DEFERRED=null;toast("Aplicação instalada.")});
+sb&&sb.auth.onAuthStateChange(ev=>{if(ev==="PASSWORD_RECOVERY")setTimeout(async()=>{const p=prompt("Nova palavra-passe (mínimo 8 caracteres):");if(p&&p.length>=8){const r=await sb.auth.updateUser({password:p});toast(r.error?r.error.message:"Palavra-passe atualizada.")}},300)});
+if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").then(reg=>{reg.addEventListener("updatefound",()=>{const w=reg.installing;if(w)w.addEventListener("statechange",()=>{if(w.state==="installed"&&navigator.serviceWorker.controller)updBanner(w)})})}).catch(()=>{}));navigator.serviceWorker.addEventListener("controllerchange",()=>{if(UPD)location.reload()})}
+init();
 })();
 </script>
 </body>
