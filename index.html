@@ -62,17 +62,19 @@ textarea{width:100%;border:1px solid var(--ln);border-radius:10px;padding:11px 1
 #tv{position:fixed;inset:0;background:var(--bg);overflow:auto;z-index:15;padding:16px}
 .tf{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:10px;margin-bottom:12px;align-items:end}.tw{overflow-x:auto}.tw table{width:100%;border-collapse:collapse;font-size:13px;min-width:520px}
 @media(max-width:560px){.tf{grid-template-columns:1fr 1fr}}@media print{#tv{display:none!important}}
+#md{position:fixed;inset:0;background:rgba(5,15,30,.6);display:grid;place-items:center;z-index:30;padding:16px}#md[hidden]{display:none}
+.mbox{background:var(--wh);color:var(--ink);border-radius:20px;padding:20px;max-width:460px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)}.mbox ol{padding-left:18px;font-size:13px;line-height:1.6;margin:12px 0}
+@media print{#md{display:none!important}}
 </style>
 </head>
 <body>
 <div id="app"></div>
 <div class="toast" id="toast" role="status"></div>
-<div id="pv" hidden></div><div id="tv" hidden></div>
+<div id="pv" hidden></div><div id="tv" hidden></div><div id="md" hidden></div>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
 <script>
 (()=>{
-const PAY_INFO=""; // ex.: "Transferência para o IBAN AO06... em nome de ... | Multicaixa Express: 9xx xxx xxx"
 const SB_URL="https://cqbvwjtgilnsnnplnbbr.supabase.co",SB_KEY="sb_publishable_IST8t394Xz3XF0pAAP-Xig_c3OPhqWd";
 const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;
 let user=null,WS={};
@@ -303,28 +305,64 @@ function texp(kind){const{d,vis,rows}=tblData(),H=vis.map(c=>c[1]),R=rows.map(r=
  if(kind==="xlsx"){if(!window.XLSX)return toast("A biblioteca Excel não carregou. Usa o CSV.");const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([H,...R]),"Dados");return XLSX.writeFile(wb,"kamba-"+TB.ds+".xlsx")}
  const cell=v=>{if(typeof v==="number")return String(v);let t=String(v==null?"":v);if(/^[=+\-@\t\r]/.test(t))t="'"+t;return '"'+t.replace(/"/g,'""')+'"'};
  dl(new Blob(["\ufeff"+[H,...R].map(r=>r.map(cell).join(";")).join("\r\n")],{type:"text/csv;charset=utf-8"}),"kamba-"+TB.ds+".csv")}
-const PST={pending:"Pendente",processing:"Em processamento",confirmed:"Confirmado",failed:"Falhado",cancelled:"Cancelado",refunded:"Reembolsado"},PT={personal:10000,business:49900};
+const PST={pending:"Pendente",awaiting:"A aguardar confirmação",confirmed:"Pago",rejected:"Rejeitado",expired:"Expirado",cancelled:"Cancelado",refunded:"Reembolsado",processing:"Em processamento",failed:"Falhado"},PT={personal:10000,business:49900};
+const stc=x=>x==="confirmed"?"ok":["rejected","expired","cancelled","failed"].includes(x)?"bad":"w";
+const effSt=r=>r.status==="pending"&&r.expires_at&&new Date(r.expires_at)<new Date()?"expired":r.status;
+const LOGO='<div class="logo" style="background:linear-gradient(135deg,var(--bl),var(--bl2));color:#fff;width:48px;height:48px;flex-shrink:0" aria-hidden="true">₭</div>';
+const AD={rows:[]};
 const instAmt=(pl,n,k)=>{const t=PT[pl],b=Math.floor(t/n);return k===n?t-b*(n-1):b};
 function prevInst(){const e=$("#pi");if(!e)return;const pl=$("#pl").value,n=+$("#pn2").value;e.textContent=n===1?"Pagamento único: "+money(instAmt(pl,1,1)):n+" prestações de "+money(instAmt(pl,n,1))+", a última de "+money(instAmt(pl,n,n))+" (total "+money(PT[pl])+", sem juros)."}
+const ERRBOX='<div style="max-width:720px;margin:0 auto"><div class="al bad">Não foi possível carregar. Já executaste as migrações 004 a 006 no Supabase?</div><button class="primary" data-a="tclose">Fechar</button></div>';
 async function payOpen(){const t=$("#tv");t.hidden=false;t.innerHTML='<div style="max-width:720px;margin:0 auto"><p class="mu">A carregar...</p></div>';
- const[a,b]=await Promise.all([sb.from("subscriptions").select("*").maybeSingle(),sb.from("payment_requests").select("*").order("created_at",{ascending:false})]);
- if(a.error||b.error){t.innerHTML='<div style="max-width:720px;margin:0 auto"><div class="al bad">Não foi possível carregar. Já executaste o 004 e o 005 (SQL)?</div><button class="primary" data-a="tclose">Fechar</button></div>';return}
+ const[a,b,ad]=await Promise.all([sb.from("subscriptions").select("*").maybeSingle(),sb.from("payment_requests").select("*").order("created_at",{ascending:false}),sb.rpc("is_admin")]);
+ if(a.error||b.error){t.innerHTML=ERRBOX;return}
  const sb1=a.data,rq=b.data||[],G={};rq.forEach(r=>(G[r.group_id]=G[r.group_id]||[]).push(r));
  const cur=Object.values(G).map(x=>({gid:x[0].group_id,plan:x[0].plan,n:x[0].installments,k:Math.max(...x.map(y=>y.installment_no))+1})).find(g=>g.k<=g.n);
- const mr=`<div class="field"><label for="pm2">Método</label><select id="pm2"><option value="transfer">Transferência bancária</option><option value="multicaixa_express">Multicaixa Express</option><option value="other">Outro</option></select></div><div class="field"><label for="prf2">Referência do pagamento</label><input id="prf2" required minlength="3" maxlength="60"></div>`;
- const form=cur?`<p style="font-size:14px"><strong>Prestação ${cur.k} de ${cur.n}</strong> (${cur.plan==="business"?"Empresarial":"Particular"}): ${money(instAmt(cur.plan,cur.n,cur.k))}</p><form data-f="pay"><input type="hidden" id="pg" value="${esc(cur.gid)}"><input type="hidden" id="pl" value="${cur.plan}"><input type="hidden" id="pn2" value="${cur.n}"><input type="hidden" id="pk" value="${cur.k}"><div class="fg">${mr}<div class="field w"><button class="primary full">Registar prestação</button></div></div></form>`
- :`<form data-f="pay"><input type="hidden" id="pg" value=""><input type="hidden" id="pk" value="1"><div class="fg"><div class="field"><label for="pl">Plano</label><select id="pl"><option value="personal">Particular: 10.000 Kz/ano</option><option value="business">Empresarial: 49.900 Kz/ano</option></select></div><div class="field"><label for="pn2">Pagar em</label><select id="pn2">${Array.from({length:12},(_,i)=>`<option value="${i+1}">${i+1}x</option>`).join("")}</select></div><p id="pi" class="mu w" style="font-size:13px;margin:0"></p>${mr}<div class="field w"><button class="primary full">Pedir ativação</button></div></div></form>`;
- t.innerHTML=`<div style="max-width:720px;margin:0 auto"><div class="topline"><h2>Plano e pagamentos</h2><button class="primary" data-a="tclose">Fechar</button></div>
+ const sel=cur?`<p style="font-size:14px"><strong>Prestação ${cur.k} de ${cur.n}</strong> (${cur.plan==="business"?"Empresarial":"Particular"}): ${money(instAmt(cur.plan,cur.n,cur.k))}</p><input type="hidden" id="pg" value="${esc(cur.gid)}"><input type="hidden" id="pl" value="${cur.plan}"><input type="hidden" id="pn2" value="${cur.n}"><input type="hidden" id="pk" value="${cur.k}">`
+ :`<input type="hidden" id="pg" value=""><input type="hidden" id="pk" value="1"><div class="fg"><div class="field"><label for="pl">Plano</label><select id="pl"><option value="personal">Particular: 10.000 Kz/ano</option><option value="business">Empresarial: 49.900 Kz/ano</option></select></div><div class="field"><label for="pn2">Pagar em</label><select id="pn2">${Array.from({length:12},(_,i)=>`<option value="${i+1}">${i+1}x</option>`).join("")}</select></div><p id="pi" class="mu w" style="font-size:13px;margin:0"></p></div>`;
+ const cards=`<div class="modes" style="margin:14px 0 4px"><div class="mode" style="cursor:default"><span class="ico" aria-hidden="true">🏦</span><strong>Transferência bancária</strong><small>Pague por transferência bancária usando o IBAN disponibilizado.</small><button class="primary" type="button" data-a="pnew">Ver dados bancários</button></div><div class="mode" style="cursor:default;opacity:.85"><span class="ico" aria-hidden="true">📱</span><strong>PayPay Angola</strong><small>Integração em preparação. Ainda não está disponível.</small><button class="secondary" type="button" disabled>Em preparação</button></div></div>`;
+ const list=rq.map(r=>{const st=effSt(r),open=st==="pending"||st==="awaiting";return `<div class="tx"><div class="tb"><strong>${r.plan==="business"?"Empresarial":"Particular"} · ${money(r.amount)}${r.installments>1?" · prestação "+r.installment_no+"/"+r.installments:""}</strong><small>${esc(r.reference)} · ${fd(r.created_at.slice(0,10))}</small></div><div class="ta"><span class="st ${stc(st)}">${PST[st]||esc(st)}</span><div>${open?`<button class="secondary small" data-a="pdet" data-id="${esc(r.id)}">Ver dados bancários</button>`:""}${st==="pending"?`<button class="danger small" data-a="pcan" data-id="${esc(r.id)}">Cancelar</button>`:""}</div></div></div>`}).join("")||'<div class="empty">Ainda não fizeste pedidos.</div>';
+ t.innerHTML=`<div style="max-width:720px;margin:0 auto"><div class="topline"><h2>Plano e pagamentos</h2><div style="display:flex;gap:8px;flex-wrap:wrap">${ad.data===true?'<button class="secondary" data-a="padm">Administração de pagamentos</button>':""}<button class="primary" data-a="tclose">Fechar</button></div></div>
  <section class="panel"><h3>O teu plano</h3>${sb1?`<p>${sb1.plan==="business"?"Empresarial":"Particular"} · <span class="st ${sb1.status==="active"?"ok":"w"}">${{trial:"Teste",active:"Ativo",expired:"Expirado"}[sb1.status]||esc(sb1.status)}</span>${sb1.expires_at?" · até "+fd(sb1.expires_at):""}</p>`:'<p class="mu">Ainda não tens plano ativo. Estás em teste gratuito.</p>'}</section>
- <section class="panel" style="margin-top:14px"><h3>Pagar a subscrição anual (até 12 prestações)</h3>
- <p style="font-size:14px">${PAY_INFO?esc(PAY_INFO):"Os dados de pagamento ainda não foram configurados pelo administrador."}</p>
- <p class="mu" style="font-size:13px">Depois de pagares, regista a referência. O pedido fica <strong>pendente</strong> até o administrador confirmar o recebimento. Não envies PINs, palavras-passe nem capturas com dados bancários.</p>${form}</section>
- <section class="panel" style="margin-top:14px"><h3>Os teus pedidos</h3>${rq.map(r=>`<div class="tx"><div class="tb"><strong>${r.plan==="business"?"Empresarial":"Particular"} · ${money(r.amount)}${r.installments>1?" · prestação "+r.installment_no+"/"+r.installments:""}</strong><small>${esc(r.reference)} · ${fd(r.created_at.slice(0,10))}</small></div><span class="st ${r.status==="confirmed"?"ok":["failed","cancelled"].includes(r.status)?"bad":"w"}">${PST[r.status]||esc(r.status)}</span></div>`).join("")||'<div class="empty">Ainda não fizeste pedidos.</div>'}</section></div>`;
+ <section class="panel" style="margin-top:14px"><h3>Pagar a subscrição anual (até 12 prestações)</h3>${sel}${cards}<p class="mu" style="font-size:12px">Os dados bancários só são mostrados depois de criares a cobrança. Nunca envies PINs, palavras-passe nem códigos de autenticação.</p></section>
+ <section class="panel" style="margin-top:14px"><h3>Os teus pedidos</h3>${list}</section></div>`;
  if(!cur)prevInst()}
-async function doPay(){const pl=$("#pl").value,n=+$("#pn2").value,k=+$("#pk").value,ref=$("#prf2").value.trim(),gid=$("#pg").value||uid();if(ref.length<3)return toast("Indica a referência do pagamento.");
- const r=await sb.from("payment_requests").insert({plan:pl,amount:instAmt(pl,n,k),method:$("#pm2").value,reference:ref,group_id:gid,installments:n,installment_no:k});
- if(r.error)return toast(r.error.code==="23505"?"Esta referência ou prestação já foi registada.":"Não foi possível registar: "+r.error.message);
- toast("Pedido registado. Fica pendente até confirmação.");payOpen()}
+async function pnew(){const pl=$("#pl").value,n=+$("#pn2").value,k=+$("#pk").value,gid=$("#pg").value||uid();
+ const r=await sb.from("payment_requests").insert({plan:pl,amount:instAmt(pl,n,k),method:"transfer",group_id:gid,installments:n,installment_no:k}).select("id").single();
+ if(r.error)return toast(/indispon/i.test(r.error.message)?"Transferência bancária ainda não disponível. Tenta mais tarde.":"Não foi possível criar a cobrança: "+r.error.message);
+ showPay(r.data.id);payOpen()}
+async function showPay(id){const r=await sb.rpc("get_payment_details",{p_id:id}),d=r.data&&r.data[0];
+ if(r.error||!d)return toast("Esta cobrança já não está disponível para pagamento.");
+ const row=(l,v,c)=>`<div class="tx"><div class="tb"><small>${l}</small><strong style="font-size:15px;word-break:break-all">${esc(v)}</strong></div><button class="secondary small" type="button" data-a="pcopy" data-id="${esc(c)}">Copiar</button></div>`;
+ const m=$("#md");m.hidden=false;
+ m.innerHTML=`<div class="mbox" role="dialog" aria-modal="true" aria-label="Pagamento por transferência bancária"><div style="display:flex;gap:12px;align-items:center">${LOGO}<div><h3 style="margin:0">Kamba Gestão</h3><div class="mu" style="font-size:13px">Pagamento por transferência bancária</div></div></div>
+ ${row("Titular da conta",d.holder,d.holder)}${row("Banco",d.bank,d.bank)}${row("IBAN",d.iban.replace(/(.{4})/g,"$1 ").trim(),d.iban)}${row("Valor exato a pagar",money(d.amount),String(d.amount))}${row("Referência da cobrança (usa-a na descrição)",d.reference,d.reference)}
+ <ol><li>Abre a app do teu banco e faz uma transferência para o IBAN acima, com o valor exato.</li><li>Escreve a referência na descrição da transferência.</li><li>Se quiseres, anexa o comprovativo e carrega em «Já efetuei o pagamento».</li></ol>
+ <div class="note" style="margin:0 0 12px">O comprovativo não confirma o pagamento. A cobrança só passa a <strong>Pago</strong> depois de o administrador verificar que o dinheiro entrou na conta. Nunca partilhes PINs, palavras-passe ou códigos.</div>
+ ${d.status==="awaiting"?'<div class="al warn">Já indicaste que pagaste. A aguardar confirmação.</div>':""}
+ <input type="hidden" id="pid" value="${esc(id)}"><div class="field"><label for="pf">Comprovativo (opcional · JPG, PNG ou PDF até 5 MB)</label><input id="pf" type="file" accept="image/jpeg,image/png,application/pdf"></div>
+ <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="primary" style="flex:1" data-a="pclaim">${d.status==="awaiting"?"Atualizar comprovativo":"Já efetuei o pagamento"}</button><button class="secondary" data-a="mclose">Fechar</button></div></div>`}
+async function pclaim(){const id=$("#pid").value,f=$("#pf").files[0];let path=null;
+ if(f){if(f.size>5*1048576)return toast("O ficheiro tem mais de 5 MB.");const ext={"image/jpeg":"jpg","image/png":"png","application/pdf":"pdf"}[f.type];if(!ext)return toast("Só são aceites JPG, PNG ou PDF.");
+  path=(user.id||"u")+"/"+id+"-"+Date.now()+"."+ext;const u=await sb.storage.from("comprovativos").upload(path,f,{contentType:f.type});if(u.error)return toast("Não foi possível enviar o comprovativo: "+u.error.message)}
+ const r=await sb.rpc("claim_payment",{p_id:id,p_proof:path});if(r.error)return toast("Não foi possível registar: "+r.error.message);
+ $("#md").hidden=true;$("#md").innerHTML="";toast("Registado. A aguardar confirmação do administrador.");payOpen()}
+async function padm(){const t=$("#tv");t.innerHTML='<div style="max-width:720px;margin:0 auto"><p class="mu">A carregar...</p></div>';
+ const[s1,l]=await Promise.all([sb.rpc("admin_get_settings"),sb.rpc("admin_list_payments")]);if(s1.error||l.error){t.innerHTML=ERRBOX;return}
+ AD.rows=l.data||[];const c=s1.data||{},ck=(id,v,tx)=>`<label style="display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);margin:0"><input id="${id}" type="checkbox" style="width:auto" ${v?"checked":""}>${tx}</label>`;
+ t.innerHTML=`<div style="max-width:720px;margin:0 auto"><div class="topline"><h2>Configurações de pagamento</h2><div style="display:flex;gap:8px"><button class="secondary" data-a="plano">Voltar</button><button class="primary" data-a="tclose">Fechar</button></div></div>
+ <section class="panel"><h3>Conta para transferências</h3><form data-f="aset"><div class="fg"><div class="field"><label for="at">Tipo de conta</label><select id="at"><option value="personal">Pessoal</option><option value="business">Empresarial</option></select></div>
+ <div class="field"><label for="ah">Nome do titular</label><input id="ah" maxlength="100" value="${esc(c.holder||"")}"></div><div class="field"><label for="ab">Banco</label><input id="ab" maxlength="60" value="${esc(c.bank||"")}"></div>
+ <div class="field"><label for="ai">IBAN (AO + 23 dígitos)</label><input id="ai" maxlength="40" value="${esc(c.iban||"")}"></div><div class="field"><label for="af">Ativa desde</label><input id="af" type="date" value="${esc(c.active_from||"")}"></div>
+ <div class="field">${ck("av",c.verified,"Dados verificados")}</div><div class="field w">${ck("ae",c.transfer_enabled,"Transferência bancária ativa")}</div>
+ <div class="field w"><label style="display:flex;gap:8px;align-items:center;font-size:14px;margin:0;opacity:.6"><input type="checkbox" disabled style="width:auto">PayPay Angola: integração em preparação (indisponível)</label></div>
+ <div class="field w"><button class="primary full">Guardar</button></div></div></form></section>
+ <section class="panel" style="margin-top:14px"><h3>Cobranças</h3><div class="tf" style="grid-template-columns:2fr 1fr"><div class="field"><label for="aq">Pesquisar (referência, cliente, valor)</label><input id="aq" autocomplete="off"></div><div class="field"><label for="afs">Estado</label><select id="afs"><option value="">Todos</option>${Object.entries(PST).map(([k,v])=>`<option value="${k}">${v}</option>`).join("")}</select></div></div><div id="adl"></div></section></div>`;
+ $("#at").value=c.account_type||"personal";alist()}
+function alist(){const q=($("#aq").value||"").toLowerCase(),fs=$("#afs").value;
+ const rows=AD.rows.filter(r=>(!fs||effSt(r)===fs)&&(!q||[r.reference,r.email,String(r.amount),PST[effSt(r)]].join(" ").toLowerCase().includes(q)));
+ $("#adl").innerHTML=rows.map(r=>{const st=effSt(r),open=st==="pending"||st==="awaiting",B=(s2,tx,k)=>`<button class="${k} small" data-a="ares" data-id="${esc(r.id)}" data-s="${s2}">${tx}</button>`;
+  return `<div class="tx"><div class="tb"><strong>${esc(r.email)} · ${money(r.amount)}</strong><small>${esc(r.reference)} · ${r.plan==="business"?"Empresarial":"Particular"}${r.installments>1?" · "+r.installment_no+"/"+r.installments:""} · ${fd(r.created_at.slice(0,10))}</small></div><div class="ta"><span class="st ${stc(st)}">${PST[st]||esc(st)}</span><div>${r.proof_path?`<button class="secondary small" data-a="aproof" data-id="${esc(r.proof_path)}">Comprovativo</button>`:""}${open?B("confirmed","Confirmar","primary")+B("rejected","Rejeitar","danger"):""}${st==="confirmed"?B("refunded","Reembolsar","danger"):""}</div></div></div>`}).join("")||'<div class="empty">Sem cobranças.</div>'}
 const KEYS={cards:[],charts:[]};
 const pf=()=>(S.prefs=S.prefs||{hide:[],order:[]});
 const ix=k=>{const i=pf().order.indexOf(k);return i<0?999:i};
@@ -339,7 +377,7 @@ const num=id=>Number($("#"+id).value),val=id=>$("#"+id).value.trim();
 const bad=m=>{toast(m);return true};
 const forms={
  auth(){doAuth("login");return true},
- pay(){doPay();return true},
+ aset(){(async()=>{const r=await sb.rpc("admin_save_settings",{p_type:$("#at").value,p_holder:$("#ah").value,p_bank:$("#ab").value,p_iban:$("#ai").value,p_verified:$("#av").checked,p_active_from:$("#af").value||null,p_transfer:$("#ae").checked,p_paypay:false});toast(r.error?r.error.message:"Configurações guardadas.");if(!r.error)padm()})();return true},
  biz(){S.biz={n:val("bn"),f:val("bf"),a:val("ba")};setTimeout(()=>{body();list()},0)},
  doc(){const items=[];for(const ln of $("#dit").value.split("\n")){const t=ln.trim();if(!t)continue;const q=t.split(";").map(x=>x.trim()),n=Math.round(Number(q[1])),pr=Math.round(Number((q[2]||"").replace(/\s/g,"")));if(!q[0]||!(n>0)||!(pr>0))return bad('Linha inválida: "'+t+'". Usa: descrição ; quantidade ; preço.');items.push({d:q[0],q:n,p:pr})}
   if(!items.length)return bad("Adiciona pelo menos um item.");
@@ -379,9 +417,10 @@ document.addEventListener("change",e=>{
  else if(t.id==="tsc"){TB.scope=t.value;TB.page=0;tblView()}
  else if(t.id==="tsz"){TB.size=+t.value;TB.page=0;tblView()}
  else if(t.id==="pl"||t.id==="pn2")prevInst();
+ else if(t.id==="afs")alist();
  else if(t.id==="sp"){const p=S.prod.find(x=>x.id===t.value);if(p){$("#pr").value=p.price;if(!$("#ds").value)$("#ds").value=p.name}}
 });
-document.addEventListener("input",e=>{if(e.target.id==="fq"){fl.q=e.target.value;list()}else if(e.target.id==="tq"){TB.q=e.target.value;TB.page=0;tblView()}});
+document.addEventListener("input",e=>{if(e.target.id==="fq"){fl.q=e.target.value;list()}else if(e.target.id==="aq")alist();else if(e.target.id==="tq"){TB.q=e.target.value;TB.page=0;tblView()}});
 function demoData(){
  const m=month,d=n=>`${m}-${String(n).padStart(2,"0")}`,x={demo:true};
  if(mode==="personal"){S.tx.push({id:uid(),type:"income",desc:"Salário",amt:250000,date:d(1),cat:"Salário",...x},{id:uid(),type:"expense",desc:"Compras de casa",amt:42000,date:d(3),cat:"Alimentação",...x},{id:uid(),type:"expense",desc:"Transporte",amt:18000,date:d(5),cat:"Transporte",...x});
@@ -390,8 +429,18 @@ function demoData(){
   S.sales.push({id:uid(),date:d(2),desc:"Venda de arroz",pid:p.id,qty:3,total:72000,paid:50000,cost:54000,...x});p.stock-=3;
   S.exp.push({id:uid(),date:d(4),desc:"Renda da loja",cat:"Renda",amt:60000,...x})}
 }
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#md").hidden){$("#md").hidden=true;$("#md").innerHTML=""}});
 document.addEventListener("click",e=>{
  const b=e.target.closest("[data-a]");if(!b)return;const a=b.dataset.a,id=b.dataset.id;
+ if(a==="pnew")return pnew();
+ if(a==="pdet")return showPay(id);
+ if(a==="pclaim")return pclaim();
+ if(a==="mclose"){$("#md").hidden=true;$("#md").innerHTML="";return}
+ if(a==="pcopy"){return(navigator.clipboard?navigator.clipboard.writeText(id).then(()=>toast("Copiado."),()=>toast("Não foi possível copiar. Seleciona o texto.")):toast("Não foi possível copiar. Seleciona o texto."))}
+ if(a==="pcan"){if(!confirm("Cancelar esta cobrança?"))return;sb.rpc("cancel_payment",{p_id:id}).then(r=>{toast(r.error?r.error.message:"Cobrança cancelada.");payOpen()});return}
+ if(a==="padm")return padm();
+ if(a==="aproof"){sb.storage.from("comprovativos").createSignedUrl(id,60).then(u=>u.error?toast("Não foi possível abrir o comprovativo."):window.open(u.data.signedUrl,"_blank","noopener"));return}
+ if(a==="ares"){const st2=b.dataset.s,tx={confirmed:"Confirmas que o dinheiro já entrou na conta bancária?",rejected:"Rejeitar este pagamento?",refunded:"Marcar como reembolsado?"}[st2];if(!confirm(tx))return;const note=prompt("Nota (opcional):")||null;sb.rpc("admin_resolve",{p_id:id,p_status:st2,p_note:note}).then(r=>{toast(r.error?r.error.message:"Atualizado.");padm()});return}
  if(a==="plano")return payOpen();
  if(a==="tbl")return tblOpen();
  if(a==="tclose"){$("#tv").hidden=true;$("#tv").innerHTML="";return}
