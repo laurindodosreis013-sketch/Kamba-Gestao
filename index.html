@@ -125,7 +125,7 @@ async function enter(m){
 }
 function shell(){
  A.innerHTML=`<header><div class="brand"><div class="logo">₭</div><div><h1>Kamba Gestão</h1><p>${mode==="personal"?"Particular / Família":"Empresarial"}</p></div></div>
- <div class="hb"><button class="secondary small" data-a="theme">Tema</button><button class="secondary small" data-a="exp">Exportar</button><button class="secondary small" data-a="sw">Trocar modo</button></div></header>
+ <div class="hb"><button class="secondary small" data-a="theme">Tema</button><button class="secondary small" data-a="mydocs">Documentos</button><button class="secondary small" data-a="exp">Exportar</button><button class="secondary small" data-a="sw">Trocar modo</button></div></header>
  <main><button class="fab" data-a="fab">+ Nova transação</button><div id="fabm"></div><div class="topline"><h2>Visão geral</h2><div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap"><button class="secondary" data-a="cust">Personalizar painel</button><div class="field" style="width:190px"><label for="month">Mês em análise</label><input id="month" type="month" value="${month}"></div></div></div><div id="cust"></div>
  <div id="cards" class="cards"></div><div id="alerts"></div><div id="charts" class="charts"></div><div id="body"></div></main>
  <footer>${mode==="personal"?"Os cálculos servem para organização pessoal e não constituem aconselhamento financeiro.":"Documentos e valores são de gestão interna, não são faturas fiscais válidas em Angola. O saldo de caixa conta o recebido pelo mês da venda e não inclui compras de stock. O resultado estimado usa o custo dos produtos vendidos."} Exporta uma cópia dos dados regularmente.</footer>`;
@@ -375,6 +375,82 @@ function alist(){const q=($("#aq").value||"").toLowerCase(),fs=$("#afs").value;
  const rows=AD.rows.filter(r=>(!fs||effSt(r)===fs)&&(!q||[r.reference,r.email,String(r.amount),PST[effSt(r)]].join(" ").toLowerCase().includes(q)));
  $("#adl").innerHTML=rows.map(r=>{const st=effSt(r),open=st==="pending"||st==="awaiting",B=(s2,tx,k)=>`<button class="${k} small" data-a="ares" data-id="${esc(r.id)}" data-s="${s2}">${tx}</button>`;
   return `<div class="tx"><div class="tb"><strong>${esc(r.email)} · ${money(r.amount)}</strong><small>${esc(r.reference)} · ${PLN(r.plan)}${r.installments>1?" · "+r.installment_no+"/"+r.installments:""} · ${fd(r.created_at.slice(0,10))}</small></div><div class="ta"><span class="st ${stc(st)}">${PST[st]||esc(st)}</span><div>${r.proof_path?`<button class="secondary small" data-a="aproof" data-id="${esc(r.proof_path)}">Comprovativo</button>`:""}${open?B("confirmed","Confirmar","primary")+B("rejected","Rejeitar","danger"):""}${st==="confirmed"?B("refunded","Reembolsar","danger"):""}</div></div></div>`}).join("")||'<div class="empty">Sem cobranças.</div>'}
+const MF={"application/pdf":["PDF","📄"],"image/jpeg":["JPG","🖼️"],"image/png":["PNG","🖼️"],"image/webp":["WEBP","🖼️"],"text/plain":["TXT","📝"],"text/csv":["CSV","📊"],"application/vnd.openxmlformats-officedocument.wordprocessingml.document":["DOCX","📝"],"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":["XLSX","📊"]};
+const EXTM={pdf:"application/pdf",jpg:"image/jpeg",jpeg:"image/jpeg",png:"image/png",webp:"image/webp",txt:"text/plain",csv:"text/csv",docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",xlsx:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"};
+const DCAT=["Faturas","Recibos","Comprovativos","Contratos","Fotografias","Impostos","Saúde","Educação","Outros"],LT={expense:"Despesa",income:"Receita",sale:"Venda",product:"Produto",goal:"Meta",purchase:"Compra",other:"Outro"};
+let DOC={folder:null,crumbs:[],tab:"all",q:"",cat:"",type:"",page:0,size:20,rows:[],folders:[],verId:null};
+const fsz=n=>n<1024?n+" B":n<1048576?Math.round(n/1024)+" KB":(n/1048576).toFixed(1)+" MB";
+const safeName=n=>n.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^A-Za-z0-9._-]+/g,"_").replace(/\.{2,}/g,".").replace(/^\.+/,"").slice(-100)||"ficheiro";
+function sniff(f){return new Promise(res=>{const ext=(f.name.split(".").pop()||"").toLowerCase(),m=EXTM[ext];if(!m)return res(null);const r=new FileReader();
+ r.onload=()=>{const b=new Uint8Array(r.result),h=n=>Array.from(b.slice(0,n)).map(x=>x.toString(16).padStart(2,"0")).join("");
+  const ok={"application/pdf":()=>h(4)==="25504446","image/png":()=>h(4)==="89504e47","image/jpeg":()=>h(3)==="ffd8ff","image/webp":()=>h(4)==="52494646"&&String.fromCharCode(...b.slice(8,12))==="WEBP","text/plain":()=>!b.includes(0),"text/csv":()=>!b.includes(0)}[m]||(()=>h(2)==="504b");
+  res(ok()?m:null)};r.onerror=()=>res(null);r.readAsArrayBuffer(f.slice(0,512))})}
+function docsOpen(){DOC={folder:null,crumbs:[],tab:"all",q:"",cat:"",type:"",page:0,size:20,rows:[],folders:[],verId:null};
+ const acc=Object.keys(EXTM).map(e=>"."+e).join(",");
+ $("#tv").innerHTML=`<div style="max-width:1000px;margin:0 auto"><div class="topline"><h2>Os Meus Documentos</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="primary" data-a="mfpick">Carregar ficheiros</button><button class="secondary" data-a="mfnewf">Nova pasta</button><button class="secondary" data-a="tclose">Fechar</button></div></div>
+ <input type="file" id="dup" multiple hidden accept="${acc}" aria-label="Escolher ficheiros"><input type="file" id="dver" hidden accept="${acc}" aria-label="Escolher nova versão">
+ <div class="tf" style="grid-template-columns:2fr 1fr 1fr"><div class="field"><label for="dq">Pesquisar (nome, categoria)</label><input id="dq" autocomplete="off"></div><div class="field"><label for="dcat">Categoria</label><select id="dcat"><option value="">Todas</option>${DCAT.map(c=>`<option>${c}</option>`).join("")}</select></div><div class="field"><label for="dty">Formato</label><select id="dty"><option value="">Todos</option><option value="pdf">PDF</option><option value="img">Imagens</option><option value="off">Word, Excel, texto</option></select></div></div>
+ <div id="dvb"></div><p class="mu" style="font-size:12px;margin-top:10px">Formatos: PDF, JPG, PNG, WEBP, DOCX, XLSX, TXT e CSV, até 10 MB. Os ficheiros ficam num armazenamento privado e só tu (e quem tiver permissão neste espaço) os podes abrir.</p></div>`;
+ $("#tv").hidden=false;docsLoad()}
+async function docsLoad(){const w=WS[mode],box=$("#dvb");if(!w){box.innerHTML='<div class="al bad">Espaço não encontrado.</div>';return}
+ box.innerHTML='<p class="mu">A carregar...</p>';const tr=DOC.tab==="trash",sr=DOC.q.replace(/[,()%*\\]/g," ").trim(),flt=sr||DOC.cat||DOC.type||DOC.tab!=="all";
+ let q=sb.from("documents").select("*",{count:"exact"}).eq("workspace_id",w);
+ q=tr?q.not("deleted_at","is",null):q.is("deleted_at",null);
+ if(DOC.tab==="fav")q=q.eq("favorite",true);
+ if(sr)q=q.or("display_name.ilike.%"+sr+"%,category.ilike.%"+sr+"%,original_name.ilike.%"+sr+"%");
+ if(DOC.cat)q=q.eq("category",DOC.cat);
+ if(DOC.type)q=q.in("mime_type",DOC.type==="pdf"?["application/pdf"]:DOC.type==="img"?["image/jpeg","image/png","image/webp"]:["text/plain","text/csv",EXTM.docx,EXTM.xlsx]);
+ if(DOC.tab==="all"&&!flt)q=DOC.folder?q.eq("folder_id",DOC.folder):q.is("folder_id",null);
+ const lim=DOC.tab==="recent"?20:DOC.size,from=DOC.tab==="recent"?0:DOC.page*DOC.size;
+ q=q.order("created_at",{ascending:false}).range(from,from+lim-1);
+ let fq=null;if(DOC.tab==="all"&&!flt)fq=(DOC.folder?sb.from("folders").select("*").eq("workspace_id",w).eq("parent_id",DOC.folder):sb.from("folders").select("*").eq("workspace_id",w).is("parent_id",null)).order("name",{ascending:true});
+ const[r,fr]=await Promise.all([q,fq||Promise.resolve({data:[]})]);
+ if(r.error||fr.error){box.innerHTML='<div class="al bad">Não foi possível carregar os documentos: '+esc((r.error||fr.error).message)+' (já executaste o 009?)</div><button class="secondary" data-a="mfretry">Tentar de novo</button>';return}
+ DOC.rows=r.data||[];DOC.folders=fr.data||[];const total=r.count==null?DOC.rows.length:r.count,np=Math.max(1,Math.ceil(total/DOC.size));
+ const TB2=[["all","Todos"],["recent","Recentes"],["fav","Favoritos"],["trash","Lixeira"]],ST={uploading:"a carregar",failed:"falhou"};
+ const crumbs=`<div class="mu" style="font-size:13px;margin:6px 0">${DOC.tab==="all"?`<button class="secondary small" data-a="mfcrumb" data-id="-1">Início</button>`+DOC.crumbs.map((c,i)=>` › <button class="secondary small" data-a="mfcrumb" data-id="${i}">${esc(c.name)}</button>`).join(""):""}</div>`;
+ const fh=DOC.folders.map(f=>row("📁",esc(f.name),"Pasta","",`<button class="secondary small" data-a="mffold" data-id="${esc(f.id)}">Abrir</button><button class="secondary small" data-a="mffren" data-id="${esc(f.id)}">Renomear</button><button class="danger small" data-a="mffdel" data-id="${esc(f.id)}">Eliminar</button>`)).join("");
+ const dh=DOC.rows.map(d=>{const I=esc(d.id),B=(a,t,k="secondary")=>`<button class="${k} small" data-a="${a}" data-id="${I}">${t}</button>`,m=MF[d.mime_type]||["?","📄"],ok=d.status==="ready";
+  const bt=tr?B("mfrest","Restaurar")+B("mfpurge","Eliminar definitivamente","danger"):(ok?B("mfview","Abrir")+B("mfdown","Descarregar")+B("mfedit","Editar")+B("mfver","Nova versão"):"")+B("mftrash","Eliminar","danger");
+  return row(m[1],esc(d.display_name)+(ok?"":` <span class="tag">${ST[d.status]||esc(d.status)}</span>`),`${m[0]} · ${fsz(d.size_bytes)} · ${esc(d.category)} · ${fd(d.created_at.slice(0,10))}${d.version>1?" · v"+d.version:""}${d.link_type?" · 🔗 "+esc(LT[d.link_type]||""):""}${(d.tags||[]).length?" · #"+d.tags.map(esc).join(" #"):""}`,ok&&!tr?`<button class="secondary small" data-a="mffav" data-id="${I}" aria-label="Favorito" aria-pressed="${d.favorite}">${d.favorite?"★":"☆"}</button>`:"",bt)}).join("");
+ const pg=DOC.tab==="recent"||np<=1?"":`<div class="bh" style="margin-top:10px;align-items:center"><button class="secondary small" data-a="mfpg" data-id="-1" ${DOC.page<=0?"disabled":""}>‹ Anterior</button><span class="mu">Página ${DOC.page+1} de ${np} · ${total} documentos</span><button class="secondary small" data-a="mfpg" data-id="1" ${DOC.page>=np-1?"disabled":""}>Seguinte ›</button></div>`;
+ box.innerHTML=`<div class="tabs" role="tablist">${TB2.map(([k,n])=>`<button type="button" role="tab" aria-selected="${DOC.tab===k}" class="${DOC.tab===k?"on":""}" data-a="mftab" data-id="${k}">${n}</button>`).join("")}</div>${crumbs}${!ENT[mode]?'<div class="al warn">Subscrição inativa: só podes consultar e descarregar.</div>':""}<div class="panel">${fh+dh||`<div class="empty"><div style="font-size:40px" aria-hidden="true">🗂️</div><strong>${tr?"A lixeira está vazia":flt?"Nenhum documento corresponde à pesquisa":"Ainda não tens documentos aqui"}</strong><br>${tr||flt?"":"Carrega o primeiro ficheiro ou cria uma pasta."}</div>`}</div>${pg}`}
+async function docsUpload(files){if(!ENT[mode])return toast("Subscrição inativa: não podes carregar ficheiros.");const w=WS[mode];
+ for(const f of files){
+  if(!f.size)return void toast(f.name+": ficheiro vazio.");
+  if(f.size>10485760){toast(f.name+": acima de 10 MB.");continue}
+  const m=await sniff(f);if(!m){toast(f.name+": tipo não permitido ou conteúdo inválido.");continue}
+  const id=uid(),path=w+"/"+id+"/v1-"+safeName(f.name);toast("A carregar "+f.name+"...");
+  const ins=await sb.from("documents").insert({id,workspace_id:w,folder_id:DOC.folder,original_name:f.name.slice(0,200),display_name:(f.name.replace(/\.[^.]+$/,"")||"Documento").slice(0,120),mime_type:m,size_bytes:f.size,storage_path:path});
+  if(ins.error){toast("Não foi possível registar "+f.name+": "+ins.error.message);continue}
+  const up=await sb.storage.from("documentos").upload(path,f,{contentType:m,upsert:false});
+  if(up.error){await sb.rpc("fail_document",{p_id:id});toast("Falhou o carregamento de "+f.name+": "+up.error.message);continue}
+  const fin=await sb.rpc("finalize_document",{p_id:id});
+  if(fin.error||fin.data!=="ready"){await sb.storage.from("documentos").remove([path]);toast("O servidor não confirmou o ficheiro "+f.name+" (nada foi guardado). Tenta de novo.");continue}
+  toast(f.name+" guardado.")}
+ docsLoad()}
+async function docsVersion(f){const d=DOC.rows.find(x=>x.id===DOC.verId);if(!d||!f)return;if(!ENT[mode])return toast("Subscrição inativa.");
+ if(f.size>10485760||!f.size)return toast("Ficheiro vazio ou acima de 10 MB.");const m=await sniff(f);if(!m)return toast("Tipo não permitido ou conteúdo inválido.");
+ const path=WS[mode]+"/"+d.id+"/v"+(d.version+1)+"-"+safeName(f.name),up=await sb.storage.from("documentos").upload(path,f,{contentType:m,upsert:false});
+ if(up.error)return toast("Falhou o carregamento: "+up.error.message);
+ const r=await sb.rpc("add_document_version",{p_id:d.id,p_path:path,p_size:f.size,p_mime:m});
+ if(r.error){await sb.storage.from("documentos").remove([path]);return toast("O servidor não aceitou a nova versão: "+r.error.message)}
+ toast("Nova versão guardada (v"+r.data+").");docsLoad()}
+async function signed(path,name){const r=await sb.storage.from("documentos").createSignedUrl(path,300,name?{download:name}:undefined);if(r.error||!r.data)return null;return r.data.signedUrl}
+function linkOpts(sel){const o=[];if(mode==="personal")S.tx.slice(-150).forEach(t=>o.push([(t.type==="income"?"income":"expense")+":"+t.id,(t.type==="income"?"Receita":"Despesa")+": "+t.desc]));else{S.sales.slice(-100).forEach(x=>o.push(["sale:"+x.id,"Venda: "+x.desc]));S.exp.slice(-100).forEach(x=>o.push(["expense:"+x.id,"Despesa: "+x.desc]));S.prod.forEach(x=>o.push(["product:"+x.id,"Produto: "+x.name]))}
+ return '<option value="">Sem ligação</option>'+o.map(([v,t])=>`<option value="${esc(v)}" ${v===sel?"selected":""}>${esc(t.slice(0,60))}</option>`).join("")}
+async function docsEdit(id){const d=DOC.rows.find(x=>x.id===id);if(!d)return;const w=WS[mode],fr=await sb.from("folders").select("*").eq("workspace_id",w).order("name",{ascending:true});
+ const m=$("#md");m.hidden=false;m.innerHTML=`<div class="mbox" role="dialog" aria-modal="true" aria-label="Editar documento"><h3 style="margin:0 0 12px">Editar documento</h3><form data-f="mfedit"><input type="hidden" id="mid" value="${esc(id)}"><div class="fg">
+ <div class="field w"><label for="mn">Nome</label><input id="mn" required maxlength="120" value="${esc(d.display_name)}"></div>
+ <div class="field"><label for="mc">Categoria</label><input id="mc" list="mcl" maxlength="40" value="${esc(d.category)}"><datalist id="mcl">${DCAT.map(c=>`<option value="${c}">`).join("")}</datalist></div>
+ <div class="field"><label for="mt">Etiquetas (separadas por vírgula)</label><input id="mt" maxlength="120" value="${esc((d.tags||[]).join(", "))}"></div>
+ <div class="field"><label for="mf">Pasta</label><select id="mf"><option value="">Início</option>${(fr.data||[]).map(f=>`<option value="${esc(f.id)}" ${f.id===d.folder_id?"selected":""}>${esc(f.name)}</option>`).join("")}</select></div>
+ <div class="field"><label for="ml">Associar a</label><select id="ml">${linkOpts(d.link_type?d.link_type+":"+d.link_id:"")}</select></div>
+ <div class="field w" style="display:flex;gap:8px"><button class="primary" style="flex:1">Guardar</button><button class="secondary" type="button" data-a="mclose">Cancelar</button></div></div></form></div>`}
+const DOCM={
+ mfedit(){(async()=>{const id=$("#mid").value,lk=$("#ml").value,[lt,li]=lk?[lk.split(":")[0],lk.slice(lk.indexOf(":")+1)]:[null,null],tags=$("#mt").value.split(",").map(x=>x.trim()).filter(Boolean).slice(0,10);
+  const r=await sb.from("documents").update({display_name:$("#mn").value.trim()||"Documento",category:$("#mc").value.trim()||"outros",tags,folder_id:$("#mf").value||null,link_type:lt,link_id:li}).eq("id",id);
+  if(r.error)return toast("Não foi possível guardar: "+r.error.message);$("#md").hidden=true;$("#md").innerHTML="";toast("Guardado.");docsLoad()})();return true}};
 const KEYS={cards:[],charts:[]};
 const pf=()=>(S.prefs=S.prefs||{hide:[],order:[]});
 const ix=k=>{const i=pf().order.indexOf(k);return i<0?999:i};
@@ -389,6 +465,7 @@ const num=id=>Number($("#"+id).value),val=id=>$("#"+id).value.trim();
 const bad=m=>{toast(m);return true};
 const forms={
  auth(){doAuth("login");return true},
+ mfedit(){return DOCM.mfedit()},
  agrant(){(async()=>{const r=await sb.rpc("admin_grant_plan",{p_email:$("#ge").value.trim(),p_plan:$("#gp").value,p_status:$("#gs").value,p_expires:$("#gx").value||null});toast(r.error?r.error.message:"Plano atualizado.")})();return true},
  acfg(){(async()=>{const r=await sb.rpc("admin_save_config",{p_trial:+$("#ct1").value||0,p_grace:+$("#cg1").value||0});toast(r.error?r.error.message:"Guardado.")})();return true},
  aset(){(async()=>{const r=await sb.rpc("admin_save_settings",{p_type:$("#at").value,p_holder:$("#ah").value,p_bank:$("#ab").value,p_iban:$("#ai").value,p_verified:$("#av").checked,p_active_from:$("#af").value||null,p_transfer:$("#ae").checked,p_paypay:false});toast(r.error?r.error.message:"Configurações guardadas.");if(!r.error)padm()})();return true},
@@ -432,9 +509,13 @@ document.addEventListener("change",e=>{
  else if(t.id==="tsz"){TB.size=+t.value;TB.page=0;tblView()}
  else if(t.id==="pl"||t.id==="pn2")prevInst();
  else if(t.id==="afs")alist();
+ else if(t.id==="dcat"){DOC.cat=t.value;DOC.page=0;docsLoad()}
+ else if(t.id==="dty"){DOC.type=t.value;DOC.page=0;docsLoad()}
+ else if(t.id==="dup"){const fl2=Array.from(t.files||[]);t.value="";if(fl2.length)docsUpload(fl2)}
+ else if(t.id==="dver"){const f2=(t.files||[])[0];t.value="";docsVersion(f2)}
  else if(t.id==="sp"){const p=S.prod.find(x=>x.id===t.value);if(p){$("#pr").value=p.price;if(!$("#ds").value)$("#ds").value=p.name}}
 });
-document.addEventListener("input",e=>{if(e.target.id==="fq"){fl.q=e.target.value;list()}else if(e.target.id==="aq")alist();else if(e.target.id==="tq"){TB.q=e.target.value;TB.page=0;tblView()}});
+document.addEventListener("input",e=>{if(e.target.id==="fq"){fl.q=e.target.value;list()}else if(e.target.id==="aq")alist();else if(e.target.id==="dq"){clearTimeout(DOC.h);DOC.q=e.target.value;DOC.page=0;DOC.h=setTimeout(docsLoad,250)}else if(e.target.id==="tq"){TB.q=e.target.value;TB.page=0;tblView()}});
 function demoData(){
  const m=month,d=n=>`${m}-${String(n).padStart(2,"0")}`,x={demo:true};
  if(mode==="personal"){S.tx.push({id:uid(),type:"income",desc:"Salário",amt:250000,date:d(1),cat:"Salário",...x},{id:uid(),type:"expense",desc:"Compras de casa",amt:42000,date:d(3),cat:"Alimentação",...x},{id:uid(),type:"expense",desc:"Transporte",amt:18000,date:d(5),cat:"Transporte",...x});
@@ -457,6 +538,27 @@ document.addEventListener("click",e=>{
  if(a==="aproof"){sb.storage.from("comprovativos").createSignedUrl(id,60).then(u=>u.error?toast("Não foi possível abrir o comprovativo."):window.open(u.data.signedUrl,"_blank","noopener"));return}
  if(a==="ares"){const st2=b.dataset.s,tx={confirmed:"Confirmas que o dinheiro já entrou na conta bancária?",rejected:"Rejeitar este pagamento?",refunded:"Marcar como reembolsado?"}[st2];if(!confirm(tx))return;const note=prompt("Nota (opcional):")||null;sb.rpc("admin_resolve",{p_id:id,p_status:st2,p_note:note}).then(r=>{toast(r.error?r.error.message:"Atualizado.");padm()});return}
  if(a==="plano")return payOpen();
+ if(a==="mydocs")return docsOpen();
+ if(a==="mfretry")return docsLoad();
+ if(a==="mfpick")return $("#dup").click();
+ if(a==="mftab"){DOC.tab=id;DOC.page=0;return docsLoad()}
+ if(a==="mfpg"){DOC.page+=+id;return docsLoad()}
+ if(a==="mfcrumb"){const i=+id;DOC.crumbs=i<0?[]:DOC.crumbs.slice(0,i+1);DOC.folder=i<0?null:DOC.crumbs[i].id;DOC.page=0;return docsLoad()}
+ if(a==="mffold"){const f=DOC.folders.find(x=>x.id===id);if(f){DOC.crumbs.push({id:f.id,name:f.name});DOC.folder=f.id;DOC.page=0;docsLoad()}return}
+ if(a==="mfnewf"){const n=(prompt("Nome da nova pasta:")||"").trim();if(!n)return;sb.from("folders").insert({workspace_id:WS[mode],parent_id:DOC.folder,name:n.slice(0,80)}).then(r=>{toast(r.error?(r.error.code==="23505"?"Já existe uma pasta com esse nome.":r.error.message):"Pasta criada.");docsLoad()});return}
+ if(a==="mffren"){const f=DOC.folders.find(x=>x.id===id),n=(prompt("Novo nome da pasta:",f?f.name:"")||"").trim();if(!f||!n)return;sb.from("folders").update({name:n.slice(0,80)}).eq("id",id).then(r=>{toast(r.error?(r.error.code==="23505"?"Já existe uma pasta com esse nome.":r.error.message):"Pasta renomeada.");docsLoad()});return}
+ if(a==="mffdel"){if(!confirm("Eliminar esta pasta? Os documentos que tem ficam em «Início»; nada é apagado."))return;sb.from("folders").delete().eq("id",id).then(r=>{toast(r.error?r.error.message:"Pasta eliminada.");docsLoad()});return}
+ if(a==="mfview"){const d=DOC.rows.find(x=>x.id===id);if(!d)return;signed(d.storage_path).then(u=>{if(!u)return toast("Não foi possível abrir o ficheiro.");const m=$("#md");m.hidden=false;const img=d.mime_type.startsWith("image/");
+  m.innerHTML=`<div class="mbox" style="max-width:820px" role="dialog" aria-modal="true" aria-label="Pré-visualização"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><h3 style="margin:0">${esc(d.display_name)}</h3><button class="secondary small" data-a="mclose">Fechar</button></div>${img?`<img src="${esc(u)}" alt="${esc(d.display_name)}" style="max-width:100%;margin-top:10px;border-radius:10px">`:d.mime_type==="application/pdf"?`<iframe src="${esc(u)}" title="${esc(d.display_name)}" style="width:100%;height:70vh;border:0;margin-top:10px"></iframe>`:'<p class="mu">Este formato não tem pré-visualização. Usa «Descarregar».</p>'}</div>`});return}
+ if(a==="mfdown"){const d=DOC.rows.find(x=>x.id===id);if(!d)return;signed(d.storage_path,d.original_name).then(u=>{if(!u)return toast("Não foi possível descarregar.");const l=document.createElement("a");l.href=u;l.download=d.original_name;l.rel="noopener";l.click()});return}
+ if(a==="mffav"){const d=DOC.rows.find(x=>x.id===id);if(!d)return;sb.from("documents").update({favorite:!d.favorite}).eq("id",id).then(r=>{if(r.error)toast(r.error.message);docsLoad()});return}
+ if(a==="mfedit")return docsEdit(id);
+ if(a==="mfver"){DOC.verId=id;return $("#dver").click()}
+ if(a==="mftrash"){if(!confirm("Mover para a lixeira? Podes recuperá-lo depois."))return;sb.from("documents").update({deleted_at:new Date().toISOString()}).eq("id",id).then(r=>{toast(r.error?r.error.message:"Movido para a lixeira.");docsLoad()});return}
+ if(a==="mfrest"){sb.from("documents").update({deleted_at:null}).eq("id",id).then(r=>{toast(r.error?r.error.message:"Documento restaurado.");docsLoad()});return}
+ if(a==="mfpurge"){if(!confirm("Eliminar definitivamente? Isto apaga o ficheiro e todas as versões, e não pode ser desfeito."))return;(async()=>{const v=await sb.from("document_versions").select("storage_path").eq("document_id",id),d=DOC.rows.find(x=>x.id===id),paths=[...new Set([...(v.data||[]).map(x=>x.storage_path),d&&d.storage_path].filter(Boolean))];
+  if(paths.length){const rm=await sb.storage.from("documentos").remove(paths);if(rm.error)return toast("Não foi possível apagar o ficheiro: "+rm.error.message+". O registo foi mantido.")}
+  const r=await sb.from("documents").delete().eq("id",id);toast(r.error?r.error.message:"Eliminado definitivamente.");docsLoad()})();return}
  if(a==="tbl")return tblOpen();
  if(a==="tclose"){$("#tv").hidden=true;$("#tv").innerHTML="";return}
  if(a==="tsort"){TB.sort=TB.sort.k===id?{k:id,d:-TB.sort.d}:{k:id,d:1};TB.page=0;return tblView()}
