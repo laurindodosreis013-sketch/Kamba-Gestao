@@ -77,7 +77,7 @@ textarea{width:100%;border:1px solid var(--ln);border-radius:10px;padding:11px 1
 (()=>{
 const SB_URL="https://cqbvwjtgilnsnnplnbbr.supabase.co",SB_KEY="sb_publishable_IST8t394Xz3XF0pAAP-Xig_c3OPhqWd";
 const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;
-let user=null,WS={};
+let user=null,WS={},SUBS=[],PL={},HAS={personal:false,business:false},ENT={personal:false,business:false};
 const $=s=>document.querySelector(s),A=$("#app");
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money=n=>new Intl.NumberFormat("pt-PT",{maximumFractionDigits:0,useGrouping:"always"}).format(Math.round(n))+" Kz";
@@ -100,17 +100,20 @@ function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";cl
 const save=()=>{wr("kamba_v2_"+mode,S);if(sb&&user&&WS[mode]){clearTimeout(save.h);const m=mode,snap=S;save.h=setTimeout(async()=>{const r=await sb.from("app_state").upsert({workspace_id:WS[m],data:snap,updated_at:new Date().toISOString()});if(r.error)toast("Não foi possível sincronizar: "+r.error.message)},600)}};
 const th=rd("kamba_v2_theme");if(th)document.documentElement.dataset.theme=th;
 
+const price=c=>{const p=PL[c];return p&&p.active&&p.price?money(p.price)+(p.period_months===12?" por ano":" / "+p.period_months+" meses"):"Preço por definir"};
+const PLN=c=>(PL[c]&&PL[c].name)||c;
 function gate(){
  mode=null;
  const has=m=>!!WS[m];
  A.innerHTML=`<div class="gate"><div class="logo">₭</div><h1>Kamba Gestão</h1><p class="mu">Como vais usar a aplicação?</p><p class="mu">${esc(user.email)} · <button class="secondary small" data-a="out">Sair</button> <button class="secondary small" data-a="plano">Plano e pagamentos</button></p>
  <div class="modes">
- <button class="mode" data-a="mode" data-m="personal"><span class="ico" aria-hidden="true">🏠</span><strong>Particular / Família</strong><small>Receitas, despesas, orçamento e metas de poupança do dia a dia.</small><span class="pr">10.000 Kz por ano</span>${has("personal")?"<em>Tem dados guardados</em>":""}</button>
- <button class="mode" data-a="mode" data-m="business"><span class="ico" aria-hidden="true">🏪</span><strong>Empresarial</strong><small>Vendas, caixa, stock, contas a receber e resultado estimado.</small><span class="pr">49.900 Kz por ano</span>${has("business")?"<em>Tem dados guardados</em>":""}</button>
+ <button class="mode" data-a="mode" data-m="personal"><span class="ico" aria-hidden="true">🏠</span><strong>Particular / Família</strong><small>Receitas, despesas, orçamento e metas de poupança do dia a dia.</small><span class="pr">${price("personal")}</span>${HAS.personal?"":"<em>🔒 Requer o plano</em>"}${has("personal")?"<em>Tem dados guardados</em>":""}</button>
+ <button class="mode" data-a="mode" data-m="business"><span class="ico" aria-hidden="true">🏪</span><strong>Empresarial</strong><small>Vendas, caixa, stock, contas a receber e resultado estimado.</small><span class="pr">${price("business")}</span>${HAS.business?"":"<em>🔒 Requer o plano</em>"}${has("business")?"<em>Tem dados guardados</em>":""}</button>
  </div>
- <div class="note"><strong>Cobrança:</strong> a subscrição anual ainda não está ativa; nesta versão de teste não é pedido pagamento.<br><strong>Privacidade:</strong> os teus dados ficam na tua conta, separados para cada modo, e só tu os consegues ver. Não introduzas PINs bancários nem palavras-passe de outros serviços.</div></div>`;
+ <div class="note"><strong>Planos:</strong> cada módulo exige o plano correspondente; o Combo inclui os dois, com dados separados. Os preços vêm das definições do administrador.<br><strong>Privacidade:</strong> os teus dados ficam na tua conta, separados para cada modo, e só tu os consegues ver. Não introduzas PINs bancários nem palavras-passe de outros serviços.</div></div>`;
 }
 async function enter(m){
+ if(!HAS[m]){toast("Este módulo exige o plano "+PLN(m)+" (ou o Combo).");return payOpen()}
  toast("A carregar...");let cloud=null;
  try{if(!WS[m]){const id=uid(),r=await sb.from("workspaces").insert({id,kind:m,name:m==="personal"?"Particular":"Empresa"});if(r.error)throw r.error;WS[m]=id}
   const r=await sb.from("app_state").select("data").eq("workspace_id",WS[m]).maybeSingle();if(r.error)throw r.error;cloud=r.data&&r.data.data&&Object.keys(r.data.data).length?r.data.data:null}
@@ -188,7 +191,7 @@ function cards(){
  KEYS.cards=CK.map(x=>x[0]);$("#cards").innerHTML=applyPrefs(CK);
 }
 function alerts(){
- const a=[];
+ const a=[];if(!ENT[mode])a.push(["bad","Subscrição inativa: só consulta e exportação. As alterações não são guardadas. Renova em «Plano e pagamentos»."]);
  if(mode==="personal"){const m=mtx();Object.entries(S.bud).forEach(([k,l])=>{const p=sum(m.filter(t=>t.type==="expense"&&t.cat===k),t=>t.amt)/l*100;
   if(p>100)a.push(["bad",`Ultrapassaste o limite de ${k} (${Math.round(p)}%). Considera rever o orçamento.`]);else if(p>=80)a.push(["warn",`Estás perto do limite de ${k} (${Math.round(p)}%).`])})}
  else{S.prod.filter(p=>p.stock<=p.min).forEach(p=>a.push(["warn",`Stock baixo: ${p.name} (${p.stock} em stock, mínimo ${p.min}).`]));
@@ -305,25 +308,31 @@ function texp(kind){const{d,vis,rows}=tblData(),H=vis.map(c=>c[1]),R=rows.map(r=
  if(kind==="xlsx"){if(!window.XLSX)return toast("A biblioteca Excel não carregou. Usa o CSV.");const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([H,...R]),"Dados");return XLSX.writeFile(wb,"kamba-"+TB.ds+".xlsx")}
  const cell=v=>{if(typeof v==="number")return String(v);let t=String(v==null?"":v);if(/^[=+\-@\t\r]/.test(t))t="'"+t;return '"'+t.replace(/"/g,'""')+'"'};
  dl(new Blob(["\ufeff"+[H,...R].map(r=>r.map(cell).join(";")).join("\r\n")],{type:"text/csv;charset=utf-8"}),"kamba-"+TB.ds+".csv")}
-const PST={pending:"Pendente",awaiting:"A aguardar confirmação",confirmed:"Pago",rejected:"Rejeitado",expired:"Expirado",cancelled:"Cancelado",refunded:"Reembolsado",processing:"Em processamento",failed:"Falhado"},PT={personal:10000,business:49900};
+const PST={pending:"Pendente",awaiting:"A aguardar confirmação",confirmed:"Pago",rejected:"Rejeitado",expired:"Expirado",cancelled:"Cancelado",refunded:"Reembolsado",processing:"Em processamento",failed:"Falhado"};
 const stc=x=>x==="confirmed"?"ok":["rejected","expired","cancelled","failed"].includes(x)?"bad":"w";
 const effSt=r=>r.status==="pending"&&r.expires_at&&new Date(r.expires_at)<new Date()?"expired":r.status;
 const LOGO='<div class="logo" style="background:linear-gradient(135deg,var(--bl),var(--bl2));color:#fff;width:48px;height:48px;flex-shrink:0" aria-hidden="true">₭</div>';
 const AD={rows:[]};
-const instAmt=(pl,n,k)=>{const t=PT[pl],b=Math.floor(t/n);return k===n?t-b*(n-1):b};
-function prevInst(){const e=$("#pi");if(!e)return;const pl=$("#pl").value,n=+$("#pn2").value;e.textContent=n===1?"Pagamento único: "+money(instAmt(pl,1,1)):n+" prestações de "+money(instAmt(pl,n,1))+", a última de "+money(instAmt(pl,n,n))+" (total "+money(PT[pl])+", sem juros)."}
+const PTv=c=>PL[c]&&PL[c].price?Number(PL[c].price):0;
+const instAmt=(pl,n,k)=>{const t=PTv(pl),b=Math.floor(t/n);return k===n?t-b*(n-1):b};
+function prevInst(){const e=$("#pi");if(!e)return;const pl=$("#pl").value,n=+$("#pn2").value;e.textContent=n===1?"Pagamento único: "+money(instAmt(pl,1,1)):n+" prestações de "+money(instAmt(pl,n,1))+", a última de "+money(instAmt(pl,n,n))+" (total "+money(PTv(pl))+", sem juros)."}
 const ERRBOX='<div style="max-width:720px;margin:0 auto"><div class="al bad">Não foi possível carregar. Já executaste as migrações 004 a 006 no Supabase?</div><button class="primary" data-a="tclose">Fechar</button></div>';
 async function payOpen(){const t=$("#tv");t.hidden=false;t.innerHTML='<div style="max-width:720px;margin:0 auto"><p class="mu">A carregar...</p></div>';
- const[a,b,ad]=await Promise.all([sb.from("subscriptions").select("*").maybeSingle(),sb.from("payment_requests").select("*").order("created_at",{ascending:false}),sb.rpc("is_admin")]);
+ const[a,,b,ad]=await Promise.all([sb.from("subscriptions").select("*"),loadPlans(),sb.from("payment_requests").select("*").order("created_at",{ascending:false}),sb.rpc("is_admin")]);
  if(a.error||b.error){t.innerHTML=ERRBOX;return}
- const sb1=a.data,rq=b.data||[],G={};rq.forEach(r=>(G[r.group_id]=G[r.group_id]||[]).push(r));
+ SUBS=a.data||[];entCalc();const rq=b.data||[],G={};rq.forEach(r=>(G[r.group_id]=G[r.group_id]||[]).push(r));
  const cur=Object.values(G).map(x=>({gid:x[0].group_id,plan:x[0].plan,n:x[0].installments,k:Math.max(...x.map(y=>y.installment_no))+1})).find(g=>g.k<=g.n);
- const sel=cur?`<p style="font-size:14px"><strong>Prestação ${cur.k} de ${cur.n}</strong> (${cur.plan==="business"?"Empresarial":"Particular"}): ${money(instAmt(cur.plan,cur.n,cur.k))}</p><input type="hidden" id="pg" value="${esc(cur.gid)}"><input type="hidden" id="pl" value="${cur.plan}"><input type="hidden" id="pn2" value="${cur.n}"><input type="hidden" id="pk" value="${cur.k}">`
- :`<input type="hidden" id="pg" value=""><input type="hidden" id="pk" value="1"><div class="fg"><div class="field"><label for="pl">Plano</label><select id="pl"><option value="personal">Particular: 10.000 Kz/ano</option><option value="business">Empresarial: 49.900 Kz/ano</option></select></div><div class="field"><label for="pn2">Pagar em</label><select id="pn2">${Array.from({length:12},(_,i)=>`<option value="${i+1}">${i+1}x</option>`).join("")}</select></div><p id="pi" class="mu w" style="font-size:13px;margin:0"></p></div>`;
+ const SL={trial:"Teste",active:"Ativo",pending:"Pendente",expired:"Expirado",cancelled:"Cancelado"};
+ const subsH=SUBS.length?SUBS.map(x=>`<div class="tx"><div class="tb"><strong>${esc(PLN(x.plan))}</strong><small>${x.expires_at?"até "+fd(x.expires_at):"sem data de fim"}</small></div><span class="st ${x.status==="active"?"ok":["expired","cancelled"].includes(x.status)?"bad":"w"}">${SL[x.status]||esc(x.status)}</span></div>`).join(""):'<p class="mu">Ainda não tens nenhum plano. Escolhe um abaixo para ativar um módulo.</p>';
+ const FT={personal:["Receitas e despesas por categoria","Orçamento com alertas","Metas de poupança","Gráficos, tabelas e exportação","Comprovativos e mapas internos"],business:["Vendas, stock e produtos","Despesas e fluxo de caixa","Contas a receber","Documentos internos (orçamento, proforma, pedido de pagamento)","Tabelas e exportação"],combo:["Todos os módulos dos dois planos","Áreas de trabalho separadas"]};
+ const plansH=["personal","business","combo"].map(c=>`<div class="mode" style="cursor:default;text-align:left;align-items:flex-start"><strong>${esc(PLN(c))}</strong><span class="pr">${price(c)}</span><ul style="margin:0;padding-left:16px;font-size:12px;color:var(--mu);line-height:1.6">${FT[c].map(f=>"<li>"+f+"</li>").join("")}</ul>${PL[c]&&PL[c].active&&PL[c].price?"":'<em>Em breve</em>'}</div>`).join("");
+ const sel=cur?`<p style="font-size:14px"><strong>Prestação ${cur.k} de ${cur.n}</strong> (${PLN(cur.plan)}): ${money(instAmt(cur.plan,cur.n,cur.k))}</p><input type="hidden" id="pg" value="${esc(cur.gid)}"><input type="hidden" id="pl" value="${cur.plan}"><input type="hidden" id="pn2" value="${cur.n}"><input type="hidden" id="pk" value="${cur.k}">`
+ :`<input type="hidden" id="pg" value=""><input type="hidden" id="pk" value="1"><div class="fg"><div class="field"><label for="pl">Plano</label><select id="pl">${Object.values(PL).filter(p=>p.active&&p.price).map(p=>`<option value="${p.code}">${esc(p.name)}: ${money(p.price)}</option>`).join("")}</select></div><div class="field"><label for="pn2">Pagar em</label><select id="pn2">${Array.from({length:12},(_,i)=>`<option value="${i+1}">${i+1}x</option>`).join("")}</select></div><p id="pi" class="mu w" style="font-size:13px;margin:0"></p></div>`;
  const cards=`<div class="modes" style="margin:14px 0 4px"><div class="mode" style="cursor:default"><span class="ico" aria-hidden="true">🏦</span><strong>Transferência bancária</strong><small>Pague por transferência bancária usando o IBAN disponibilizado.</small><button class="primary" type="button" data-a="pnew">Ver dados bancários</button></div><div class="mode" style="cursor:default;opacity:.85"><span class="ico" aria-hidden="true">📱</span><strong>PayPay Angola</strong><small>Integração em preparação. Ainda não está disponível.</small><button class="secondary" type="button" disabled>Em preparação</button></div></div>`;
- const list=rq.map(r=>{const st=effSt(r),open=st==="pending"||st==="awaiting";return `<div class="tx"><div class="tb"><strong>${r.plan==="business"?"Empresarial":"Particular"} · ${money(r.amount)}${r.installments>1?" · prestação "+r.installment_no+"/"+r.installments:""}</strong><small>${esc(r.reference)} · ${fd(r.created_at.slice(0,10))}</small></div><div class="ta"><span class="st ${stc(st)}">${PST[st]||esc(st)}</span><div>${open?`<button class="secondary small" data-a="pdet" data-id="${esc(r.id)}">Ver dados bancários</button>`:""}${st==="pending"?`<button class="danger small" data-a="pcan" data-id="${esc(r.id)}">Cancelar</button>`:""}</div></div></div>`}).join("")||'<div class="empty">Ainda não fizeste pedidos.</div>';
+ const list=rq.map(r=>{const st=effSt(r),open=st==="pending"||st==="awaiting";return `<div class="tx"><div class="tb"><strong>${PLN(r.plan)} · ${money(r.amount)}${r.installments>1?" · prestação "+r.installment_no+"/"+r.installments:""}</strong><small>${esc(r.reference)} · ${fd(r.created_at.slice(0,10))}</small></div><div class="ta"><span class="st ${stc(st)}">${PST[st]||esc(st)}</span><div>${open?`<button class="secondary small" data-a="pdet" data-id="${esc(r.id)}">Ver dados bancários</button>`:""}${st==="pending"?`<button class="danger small" data-a="pcan" data-id="${esc(r.id)}">Cancelar</button>`:""}</div></div></div>`}).join("")||'<div class="empty">Ainda não fizeste pedidos.</div>';
  t.innerHTML=`<div style="max-width:720px;margin:0 auto"><div class="topline"><h2>Plano e pagamentos</h2><div style="display:flex;gap:8px;flex-wrap:wrap">${ad.data===true?'<button class="secondary" data-a="padm">Administração de pagamentos</button>':""}<button class="primary" data-a="tclose">Fechar</button></div></div>
- <section class="panel"><h3>O teu plano</h3>${sb1?`<p>${sb1.plan==="business"?"Empresarial":"Particular"} · <span class="st ${sb1.status==="active"?"ok":"w"}">${{trial:"Teste",active:"Ativo",expired:"Expirado"}[sb1.status]||esc(sb1.status)}</span>${sb1.expires_at?" · até "+fd(sb1.expires_at):""}</p>`:'<p class="mu">Ainda não tens plano ativo. Estás em teste gratuito.</p>'}</section>
+ <section class="panel"><h3>Os teus planos</h3>${subsH}</section>
+ <section class="panel" style="margin-top:14px"><h3>Planos e preços</h3><div class="modes" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr));margin:8px 0 0">${plansH}</div></section>
  <section class="panel" style="margin-top:14px"><h3>Pagar a subscrição anual (até 12 prestações)</h3>${sel}${cards}<p class="mu" style="font-size:12px">Os dados bancários só são mostrados depois de criares a cobrança. Nunca envies PINs, palavras-passe nem códigos de autenticação.</p></section>
  <section class="panel" style="margin-top:14px"><h3>Os teus pedidos</h3>${list}</section></div>`;
  if(!cur)prevInst()}
@@ -348,7 +357,7 @@ async function pclaim(){const id=$("#pid").value,f=$("#pf").files[0];let path=nu
  const r=await sb.rpc("claim_payment",{p_id:id,p_proof:path});if(r.error)return toast("Não foi possível registar: "+r.error.message);
  $("#md").hidden=true;$("#md").innerHTML="";toast("Registado. A aguardar confirmação do administrador.");payOpen()}
 async function padm(){const t=$("#tv");t.innerHTML='<div style="max-width:720px;margin:0 auto"><p class="mu">A carregar...</p></div>';
- const[s1,l]=await Promise.all([sb.rpc("admin_get_settings"),sb.rpc("admin_list_payments")]);if(s1.error||l.error){t.innerHTML=ERRBOX;return}
+ const[s1,l,cf]=await Promise.all([sb.rpc("admin_get_settings"),sb.rpc("admin_list_payments"),sb.rpc("admin_get_config"),loadPlans()]);if(s1.error||l.error||cf.error){t.innerHTML=ERRBOX;return}
  AD.rows=l.data||[];const c=s1.data||{},ck=(id,v,tx)=>`<label style="display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);margin:0"><input id="${id}" type="checkbox" style="width:auto" ${v?"checked":""}>${tx}</label>`;
  t.innerHTML=`<div style="max-width:720px;margin:0 auto"><div class="topline"><h2>Configurações de pagamento</h2><div style="display:flex;gap:8px"><button class="secondary" data-a="plano">Voltar</button><button class="primary" data-a="tclose">Fechar</button></div></div>
  <section class="panel"><h3>Conta para transferências</h3><form data-f="aset"><div class="fg"><div class="field"><label for="at">Tipo de conta</label><select id="at"><option value="personal">Pessoal</option><option value="business">Empresarial</option></select></div>
@@ -357,12 +366,15 @@ async function padm(){const t=$("#tv");t.innerHTML='<div style="max-width:720px;
  <div class="field">${ck("av",c.verified,"Dados verificados")}</div><div class="field w">${ck("ae",c.transfer_enabled,"Transferência bancária ativa")}</div>
  <div class="field w"><label style="display:flex;gap:8px;align-items:center;font-size:14px;margin:0;opacity:.6"><input type="checkbox" disabled style="width:auto">PayPay Angola: integração em preparação (indisponível)</label></div>
  <div class="field w"><button class="primary full">Guardar</button></div></div></form></section>
+ <section class="panel" style="margin-top:14px"><h3>Planos e preços</h3>${["personal","business","combo"].map(c=>{const p=PL[c]||{};return `<div class="bi"><strong>${esc(c)}</strong><div class="fg" style="margin-top:8px"><div class="field w"><label for="pn_${c}">Nome</label><input id="pn_${c}" maxlength="80" value="${esc(p.name||"")}"></div><div class="field"><label for="pp_${c}">Preço (Kz)</label><input id="pp_${c}" type="number" min="1" step="1" value="${p.price||""}"></div><div class="field"><label for="pm_${c}">Período (meses)</label><select id="pm_${c}">${[1,3,6,12].map(x=>`<option ${x===p.period_months?"selected":""}>${x}</option>`).join("")}</select></div><div class="field"><label style="display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);margin:0"><input id="pa_${c}" type="checkbox" style="width:auto" ${p.active?"checked":""}>Disponível para venda</label></div><button class="secondary" data-a="asave" data-id="${c}">Guardar plano</button></div></div>`}).join("")}</section>
+ <section class="panel" style="margin-top:14px"><h3>Atribuir ou alterar plano de um utilizador</h3><form data-f="agrant"><div class="fg"><div class="field w"><label for="ge">E-mail da conta</label><input id="ge" type="email" required></div><div class="field"><label for="gp">Plano</label><select id="gp"><option value="personal">Particular</option><option value="business">Empresarial</option><option value="combo">Combo</option></select></div><div class="field"><label for="gs">Estado</label><select id="gs"><option value="active">Ativo</option><option value="trial">Teste</option><option value="expired">Expirado</option><option value="cancelled">Cancelado</option></select></div><div class="field w"><label for="gx">Válido até</label><input id="gx" type="date"></div><div class="field w"><button class="secondary full">Guardar</button></div></div></form></section>
+ <section class="panel" style="margin-top:14px"><h3>Período de teste e tolerância</h3><form data-f="acfg"><div class="fg"><div class="field"><label for="ct1">Dias de teste para contas novas (0 = sem teste)</label><input id="ct1" type="number" min="0" max="90" value="${cf.data.trial_days}"></div><div class="field"><label for="cg1">Dias de tolerância depois de expirar</label><input id="cg1" type="number" min="0" max="30" value="${cf.data.grace_days}"></div><div class="field w"><button class="secondary full">Guardar</button></div></div></form></section>
  <section class="panel" style="margin-top:14px"><h3>Cobranças</h3><div class="tf" style="grid-template-columns:2fr 1fr"><div class="field"><label for="aq">Pesquisar (referência, cliente, valor)</label><input id="aq" autocomplete="off"></div><div class="field"><label for="afs">Estado</label><select id="afs"><option value="">Todos</option>${Object.entries(PST).map(([k,v])=>`<option value="${k}">${v}</option>`).join("")}</select></div></div><div id="adl"></div></section></div>`;
  $("#at").value=c.account_type||"personal";alist()}
 function alist(){const q=($("#aq").value||"").toLowerCase(),fs=$("#afs").value;
  const rows=AD.rows.filter(r=>(!fs||effSt(r)===fs)&&(!q||[r.reference,r.email,String(r.amount),PST[effSt(r)]].join(" ").toLowerCase().includes(q)));
  $("#adl").innerHTML=rows.map(r=>{const st=effSt(r),open=st==="pending"||st==="awaiting",B=(s2,tx,k)=>`<button class="${k} small" data-a="ares" data-id="${esc(r.id)}" data-s="${s2}">${tx}</button>`;
-  return `<div class="tx"><div class="tb"><strong>${esc(r.email)} · ${money(r.amount)}</strong><small>${esc(r.reference)} · ${r.plan==="business"?"Empresarial":"Particular"}${r.installments>1?" · "+r.installment_no+"/"+r.installments:""} · ${fd(r.created_at.slice(0,10))}</small></div><div class="ta"><span class="st ${stc(st)}">${PST[st]||esc(st)}</span><div>${r.proof_path?`<button class="secondary small" data-a="aproof" data-id="${esc(r.proof_path)}">Comprovativo</button>`:""}${open?B("confirmed","Confirmar","primary")+B("rejected","Rejeitar","danger"):""}${st==="confirmed"?B("refunded","Reembolsar","danger"):""}</div></div></div>`}).join("")||'<div class="empty">Sem cobranças.</div>'}
+  return `<div class="tx"><div class="tb"><strong>${esc(r.email)} · ${money(r.amount)}</strong><small>${esc(r.reference)} · ${PLN(r.plan)}${r.installments>1?" · "+r.installment_no+"/"+r.installments:""} · ${fd(r.created_at.slice(0,10))}</small></div><div class="ta"><span class="st ${stc(st)}">${PST[st]||esc(st)}</span><div>${r.proof_path?`<button class="secondary small" data-a="aproof" data-id="${esc(r.proof_path)}">Comprovativo</button>`:""}${open?B("confirmed","Confirmar","primary")+B("rejected","Rejeitar","danger"):""}${st==="confirmed"?B("refunded","Reembolsar","danger"):""}</div></div></div>`}).join("")||'<div class="empty">Sem cobranças.</div>'}
 const KEYS={cards:[],charts:[]};
 const pf=()=>(S.prefs=S.prefs||{hide:[],order:[]});
 const ix=k=>{const i=pf().order.indexOf(k);return i<0?999:i};
@@ -377,6 +389,8 @@ const num=id=>Number($("#"+id).value),val=id=>$("#"+id).value.trim();
 const bad=m=>{toast(m);return true};
 const forms={
  auth(){doAuth("login");return true},
+ agrant(){(async()=>{const r=await sb.rpc("admin_grant_plan",{p_email:$("#ge").value.trim(),p_plan:$("#gp").value,p_status:$("#gs").value,p_expires:$("#gx").value||null});toast(r.error?r.error.message:"Plano atualizado.")})();return true},
+ acfg(){(async()=>{const r=await sb.rpc("admin_save_config",{p_trial:+$("#ct1").value||0,p_grace:+$("#cg1").value||0});toast(r.error?r.error.message:"Guardado.")})();return true},
  aset(){(async()=>{const r=await sb.rpc("admin_save_settings",{p_type:$("#at").value,p_holder:$("#ah").value,p_bank:$("#ab").value,p_iban:$("#ai").value,p_verified:$("#av").checked,p_active_from:$("#af").value||null,p_transfer:$("#ae").checked,p_paypay:false});toast(r.error?r.error.message:"Configurações guardadas.");if(!r.error)padm()})();return true},
  biz(){S.biz={n:val("bn"),f:val("bf"),a:val("ba")};setTimeout(()=>{body();list()},0)},
  doc(){const items=[];for(const ln of $("#dit").value.split("\n")){const t=ln.trim();if(!t)continue;const q=t.split(";").map(x=>x.trim()),n=Math.round(Number(q[1])),pr=Math.round(Number((q[2]||"").replace(/\s/g,"")));if(!q[0]||!(n>0)||!(pr>0))return bad('Linha inválida: "'+t+'". Usa: descrição ; quantidade ; preço.');items.push({d:q[0],q:n,p:pr})}
@@ -439,6 +453,7 @@ document.addEventListener("click",e=>{
  if(a==="pcopy"){return(navigator.clipboard?navigator.clipboard.writeText(id).then(()=>toast("Copiado."),()=>toast("Não foi possível copiar. Seleciona o texto.")):toast("Não foi possível copiar. Seleciona o texto."))}
  if(a==="pcan"){if(!confirm("Cancelar esta cobrança?"))return;sb.rpc("cancel_payment",{p_id:id}).then(r=>{toast(r.error?r.error.message:"Cobrança cancelada.");payOpen()});return}
  if(a==="padm")return padm();
+ if(a==="asave"){sb.rpc("admin_save_plan",{p_code:id,p_name:$("#pn_"+id).value,p_price:$("#pp_"+id).value?+$("#pp_"+id).value:null,p_months:+$("#pm_"+id).value,p_active:$("#pa_"+id).checked}).then(r=>{toast(r.error?r.error.message:"Plano guardado.");if(!r.error)padm()});return}
  if(a==="aproof"){sb.storage.from("comprovativos").createSignedUrl(id,60).then(u=>u.error?toast("Não foi possível abrir o comprovativo."):window.open(u.data.signedUrl,"_blank","noopener"));return}
  if(a==="ares"){const st2=b.dataset.s,tx={confirmed:"Confirmas que o dinheiro já entrou na conta bancária?",rejected:"Rejeitar este pagamento?",refunded:"Marcar como reembolsado?"}[st2];if(!confirm(tx))return;const note=prompt("Nota (opcional):")||null;sb.rpc("admin_resolve",{p_id:id,p_status:st2,p_note:note}).then(r=>{toast(r.error?r.error.message:"Atualizado.");padm()});return}
  if(a==="plano")return payOpen();
@@ -503,7 +518,9 @@ async function doAuth(k){
  if(r.error){const m=r.error.message||"";return authView(/Invalid login/i.test(m)?"E-mail ou palavra-passe incorretos.":/not confirmed/i.test(m)?"Confirma primeiro o teu e-mail (vê a caixa de entrada e o spam).":/already/i.test(m)?"Este e-mail já tem conta. Usa Entrar.":m)}
  if(k==="signup"&&!r.data.session)return authView("Conta criada. Enviámos um e-mail de confirmação: abre-o e depois volta aqui para entrar.");
  await start(r.data.session)}
-async function start(session){user=session.user;WS={};const r=await sb.from("workspaces").select("id,kind");(r.data||[]).forEach(w=>{if(!WS[w.kind])WS[w.kind]=w.id});gate()}
+async function loadPlans(){const r=await sb.from("plans").select("*");PL={};(r.data||[]).forEach(p=>PL[p.code]=p)}
+function entCalc(){const td=ld(new Date());for(const k of["personal","business"]){const rows=SUBS.filter(x=>x.plan===k||x.plan==="combo");HAS[k]=rows.length>0;ENT[k]=rows.some(x=>["active","trial"].includes(x.status)&&(!x.expires_at||x.expires_at>=td))}}
+async function start(session){user=session.user;WS={};const[w,sp]=await Promise.all([sb.from("workspaces").select("id,kind"),sb.from("subscriptions").select("*"),loadPlans()]);(w.data||[]).forEach(x=>{if(!WS[x.kind])WS[x.kind]=x.id});SUBS=sp.data||[];entCalc();gate()}
 (async()=>{if(!sb){A.innerHTML='<div class="gate"><div class="al bad">Não foi possível carregar a ligação à base de dados. Verifica a internet e recarrega a página.</div></div>';return}
  sb.auth.onAuthStateChange(ev=>{if(ev==="PASSWORD_RECOVERY")setTimeout(async()=>{const p=prompt("Nova palavra-passe (mínimo 8 caracteres):");if(p&&p.length>=8){const r=await sb.auth.updateUser({password:p});toast(r.error?r.error.message:"Palavra-passe atualizada.")}},300)});
  const{data}=await sb.auth.getSession();data.session?await start(data.session):authView()})();
