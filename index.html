@@ -50,7 +50,11 @@ footer{max-width:1120px;margin:0 auto;padding:0 18px 25px;color:var(--mu);font-s
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 :root{--g:#0b7a75;--g2:#e3f3f2;--ink:#0f1e33;--mu:#5a6b80;--ln:#e3e9f1;--bg:#f3f6fb;--bl:#0b2a5b;--bl2:#0e6a86;--dot:#d9e2ee;--sh:0 6px 20px rgba(11,42,91,.07);--logo-bg:#ffffff;--logo-fg:#101820}
 @media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bl:#0a1a33;--bl2:#0b4a5e;--dot:#1c2a3d;--bg:#0b1320;--wh:#131d2e;--ln:#22324a;--sh:none;--ink:#e7eef9;--mu:#93a4bb;--g2:#12363a;--logo-bg:#17283d;--logo-fg:#ffffff}}
-:root[data-theme=dark]{--bl:#0a1a33;--bl2:#0b4a5e;--dot:#1c2a3d;--bg:#0b1320;--wh:#131d2e;--ln:#22324a;--sh:none;--ink:#e7eef9;--mu:#93a4bb;--g2:#12363a;--logo-bg:#17283d;--logo-fg:#ffffff}
+:root[data-theme=dark]{--bl:#0a1a33;--bl2:#0b4a5e;--dot:#1c2a3d;--bg:#0b1320;--wh:#131d2e;--ln:#22324a;--sh:none;--ink:#e7eef9;--mu:#93a4bb;--g2:#12363a;--logo-bg:#17283d;--logo-fg:#101820}
+/* O símbolo ₭ fica escuro nos dois temas, mantendo o fundo contrastante. */
+:root{--logo-fg:#101820}
+:root[data-theme=dark]{--logo-fg:#101820}
+header .brand .logo,.gate .logo{color:#101820!important}
 body{font-family:"Plus Jakarta Sans",Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background-image:radial-gradient(circle at 1px 1px,var(--dot) 1px,transparent 0);background-size:22px 22px;background-attachment:fixed}
 header{background:linear-gradient(120deg,var(--bl),var(--bl2));color:#fff;box-shadow:0 4px 18px rgba(11,42,91,.25)}
 header .brand .logo{background:var(--logo-bg);color:var(--logo-fg);border:1px solid #ffffff26}
@@ -67,7 +71,8 @@ header .brand .logo{background:var(--logo-bg);color:var(--logo-fg);border:1px so
 :root[data-move-size="large"] #body input,:root[data-move-size="large"] #body select,:root[data-move-size="large"] #body textarea,:root[data-move-size="large"] #body button{font-size:16px;padding-top:14px;padding-bottom:14px}
 #body .tx .ta{max-width:48%;white-space:normal}
 #body .tx .ta div{justify-content:flex-end}
-@media(max-width:560px){header .hb{width:100%;flex-wrap:wrap}header .hb button{flex:1}#body .tx{gap:8px}#body .tx .ta{max-width:44%}#body .tx .ta button{padding:6px 8px}}
+.profile-head{display:flex;align-items:center;gap:14px;margin:4px 0 18px}.profile-avatar{width:76px;height:76px;flex:0 0 76px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:var(--g2);color:var(--g);font-size:26px;font-weight:800;border:2px solid var(--ln)}.profile-avatar img{width:100%;height:100%;object-fit:cover}.family-card{display:flex;align-items:center;gap:10px;border:1px solid var(--ln);border-radius:12px;padding:10px;margin-top:8px}.family-card .fc-main{flex:1;min-width:0}.family-card small{display:block;color:var(--mu);margin-top:3px}.family-summary{margin:0 0 14px;padding:12px;border:1px solid var(--ln);border-radius:12px;background:var(--bg)}.family-summary h4{margin:0 0 8px;font-size:14px}.family-summary .bh{padding:5px 0;border-bottom:1px solid var(--ln)}.family-summary .bh:last-child{border-bottom:0}
+@media(max-width:560px){.profile-head{align-items:flex-start}.profile-avatar{width:64px;height:64px;flex-basis:64px}.family-card{align-items:flex-start;flex-wrap:wrap}.family-card .fc-actions{width:100%;display:flex;justify-content:flex-end}header .hb{width:100%;flex-wrap:wrap}header .hb button{flex:1}#body .tx{gap:8px}#body .tx .ta{max-width:44%}#body .tx .ta button{padding:6px 8px}}
 .card,.panel,.mode{border-radius:18px;box-shadow:var(--sh)}.card{border-left:4px solid var(--g)}.panel h3{letter-spacing:-.01em}
 .gate .logo{background:linear-gradient(135deg,var(--bl),var(--bl2));color:#fff}.gate h1{letter-spacing:-.02em}
 button{transition:transform .12s,opacity .12s}button:active:not(:disabled){transform:scale(.97)}
@@ -112,7 +117,7 @@ const CAT=Object.fromEntries(Object.entries(CATG).map(([k,g])=>[k,g.flatMap(x=>x
 const CATS=k=>[...CAT[k],...(((S.prefs||{}).cats||{})[k]||[]).filter(c=>!c.arch).map(c=>c.n)];
 const gopts=k=>{const cu=(((S.prefs||{}).cats||{})[k]||[]).filter(c=>!c.arch).map(c=>c.n);return CATG[k].map(([t,a])=>`<optgroup label="${esc(t)}">${opts(a)}</optgroup>`).join("")+(cu.length?`<optgroup label="Minhas categorias">${opts(cu)}</optgroup>`:"")};
 const BT={tx:"Guardar movimento",bexp:"Guardar despesa",doc:"Guardar rascunho"};
-const def=m=>m==="personal"?{tx:[],bud:{},goal:{target:0,saved:0,monthly:0,deadline:"",hist:[]},notes:[],prefs:{hide:[],order:[],moveSize:"normal"}}:{prod:[],sales:[],exp:[],docs:[],biz:{},notes:[],prefs:{hide:[],order:[],moveSize:"normal"}};
+const def=m=>m==="personal"?{tx:[],bud:{},goal:{target:0,saved:0,monthly:0,deadline:"",hist:[]},profilePhoto:"",members:[],notes:[],prefs:{hide:[],order:[],moveSize:"normal"}}:{prod:[],sales:[],exp:[],docs:[],biz:{},notes:[],prefs:{hide:[],order:[],moveSize:"normal"}};
 const ICO={"Alimentação":"🛒","Habitação":"🏠","Transporte":"🚗","Saúde":"💊","Educação":"📚","Internet e telefone":"📶","Lazer":"🎮","Família":"👨‍👩‍👧","Dívidas":"💳","Salário":"💼","Negócio":"🏪","Serviços":"🛠️","Rendas":"🔑","Apoio familiar":"🤝","Renda":"🏢","Salários":"👥","Eletricidade":"⚡","Internet":"📶","Manutenção":"🔧","Impostos":"🏛️"};
 Object.assign(ICO,{"Cursos e formação":"📚","Restaurantes e takeaway": "🍽️", "Água": "💧", "Gás": "🔥", "Gerador e combustível": "⛽", "Recargas e dados móveis": "📱", "Casa e reparações": "🛠️", "Mobília e eletrodomésticos": "🛋️", "Empregada doméstica": "🧹", "Combustível": "⛽", "Táxi e candongueiro": "🚕", "Manutenção do carro": "🔧", "Seguros": "🛡️", "Medicamentos": "💊", "Consultas e exames": "🩺", "Propinas": "🎓", "Material escolar": "✏️", "Filhos": "🧒", "Apoio a familiares": "🤝", "Vestuário e calçado": "👕", "Cuidados pessoais": "💇", "Viagens": "✈️", "Assinaturas e TV": "📺", "Presentes e donativos": "🎁", "Animais de estimação": "🐾", "Impostos e taxas": "🏛️", "Poupança e investimentos": "🐷", "Empréstimos e prestações": "💳", "Pensão": "👴", "Bónus e comissões": "🏆", "Venda de bens": "🏷️", "Juros": "📈", "Reembolsos": "↩️", "Presentes recebidos": "🎁", "Telefone e dados": "📞", "Matéria-prima e consumíveis": "🧴", "Embalagens": "📦", "Publicidade e marketing": "📣", "Software e subscrições": "💻", "Contabilidade e serviços": "🧮", "Taxas bancárias": "🏦", "Licenças e alvarás": "📜", "Limpeza": "🧽", "Material de escritório": "🖇️", "Equipamentos": "🖨️", "Entregas e fretes": "🚚", "Comissões": "🏷️", "Formação": "📚", "Segurança": "🔒", "Outros": "🧾"});
 let mode=null,S,month=ld(new Date()).slice(0,7),tab="sales",fl={q:"",t:"all"},ed=null;
@@ -142,7 +147,7 @@ async function enter(m){
  if(!S){S=def(m);const o=m==="personal"&&rd("kamba_gestao_v1");
   if(o&&Array.isArray(o.transactions)){S.tx=o.transactions.map(t=>({id:t.id,type:t.type,desc:t.description,amt:t.amount,date:t.date,cat:t.category}));S.bud=o.budgets||{};S.goal.target=Number(o.goal)||0}}
  if(m==="business"){S.docs=S.docs||[];S.biz=S.biz||{};S.prod=S.prod||[];S.sales=S.sales||[];S.exp=S.exp||[]}else{S.tx=S.tx||[];S.bud=S.bud||{}}
- S.notes=Array.isArray(S.notes)?S.notes:[];S.prefs=Object.assign({hide:[],order:[],moveSize:"normal"},S.prefs||{});if(m==="personal")S.goal=Object.assign({target:0,saved:0,monthly:0,deadline:"",hist:[]},S.goal||{});
+ S.notes=Array.isArray(S.notes)?S.notes:[];S.profilePhoto=typeof S.profilePhoto==="string"?S.profilePhoto:"";S.members=Array.isArray(S.members)?S.members:[];S.prefs=Object.assign({hide:[],order:[],moveSize:"normal"},S.prefs||{});if(m==="personal")S.goal=Object.assign({target:0,saved:0,monthly:0,deadline:"",hist:[]},S.goal||{});
  tab="sales";fl={q:"",t:"all"};shell();if(!cloud)save();
 }
 function shell(){
@@ -162,13 +167,14 @@ function body(){
   <div class="field"><label for="am">Valor (Kz)</label><input id="am" type="number" min="1" step="1" required></div>
   <div class="field w"><label for="ds">Descrição</label><input id="ds" required maxlength="80" placeholder="Ex.: Compras do supermercado"></div>${dt}
   <div class="field"><label for="ct">Categoria</label><select id="ct">${gopts("expense")}</select></div>
+  <div class="field w"><label for="memberId">Associar a familiar (opcional)</label><select id="memberId"><option value="">Pessoal / sem associação</option>${(S.members||[]).map(m=>`<option value="${esc(m.id)}">${esc(m.name)}${m.relation?" · "+esc(m.relation):""}</option>`).join("")}</select><small class="mu">Ex.: propina do filho, mensalidade da filha ou combustível para um familiar.</small></div>
   <div class="field w"><button class="primary full">Guardar movimento</button></div></div></form>
   <h3 class="gap">Meta de poupança</h3><div id="goal"></div>
   <form data-f="goal"><div class="fg"><div class="field"><label for="gt">Meta total (Kz)</label><input id="gt" type="number" min="0" step="1" value="${S.goal.target||""}"></div><div class="field"><label for="gm">Poupança mensal prevista (Kz)</label><input id="gm" type="number" min="0" step="1" value="${S.goal.monthly||""}"></div><div class="field w"><label for="gd">Data desejada (opcional)</label><input id="gd" type="month" value="${esc(S.goal.deadline||"")}"></div><div class="field w"><button class="secondary full">Guardar meta</button></div></div></form>
   <form data-f="contrib" class="row2"><div class="field"><label for="gc">Valor poupado agora (Kz)</label><input id="gc" type="number" min="1" step="1" required></div><button class="secondary">Adicionar</button></form>
   <h3 class="gap">Orçamento por categoria</h3>
   <form data-f="bud"><div class="fg"><div class="field"><label for="bc">Categoria</label><select id="bc">${gopts("expense")}</select></div><div class="field"><label for="bl">Limite mensal (Kz)</label><input id="bl" type="number" min="1" step="1" required></div><div class="field w"><button class="secondary full">Definir orçamento</button></div></div></form><div id="bud"></div></section>
-  <section class="panel"><h3>Movimentos</h3><div class="filters"><div class="field"><label for="fq">Pesquisar</label><input id="fq" placeholder="Descrição ou categoria"></div>
+  <section class="panel"><h3>Movimentos</h3><div id="familySummary"></div><div class="filters"><div class="field"><label for="fq">Pesquisar</label><input id="fq" placeholder="Descrição ou categoria"></div>
   <div class="field"><label for="ft">Tipo</label><select id="ft"><option value="all">Todos</option><option value="expense">Despesas</option><option value="income">Receitas</option></select></div></div>
   <div id="list"></div>${demo}</section></div>`;
  }else{
@@ -229,7 +235,8 @@ function list(){
  if(mode==="personal"){
   const q=fl.q.toLocaleLowerCase("pt");
   const r=mtx().filter(t=>(t.desc+" "+t.cat).toLocaleLowerCase("pt").includes(q)&&(fl.t==="all"||t.type===fl.t)).reverse().sort((a,b)=>b.date.localeCompare(a.date));
-  h=r.map(t=>row(ICO[t.cat]||"🧾",esc(t.desc)+tag(t),`${esc(t.cat)} · ${fd(t.date)}`,`<span class="${t.type==="income"?"inc":"exp"}">${t.type==="income"?"+":"−"} ${money(t.amt)}</span>`,editb("tx",t.id)+compb(t.id)+delb("tx",t.id))).join("");
+  h=r.map(t=>{const mn=t.memberName||((S.members||[]).find(x=>x.id===t.memberId)||{}).name;return row(ICO[t.cat]||"🧾",esc(t.desc)+tag(t),`${esc(t.cat)} · ${fd(t.date)}${mn?`<br><strong>Familiar:</strong> ${esc(mn)}`:""}`,`<span class="${t.type==="income"?"inc":"exp"}">${t.type==="income"?"+":"−"} ${money(t.amt)}</span>`,editb("tx",t.id)+compb(t.id)+delb("tx",t.id))}).join("");
+  const fs=$("#familySummary");if(fs){const expenses=mtx().filter(t=>t.type==="expense"),totals={};expenses.forEach(t=>{const nm=t.memberName||((S.members||[]).find(x=>x.id===t.memberId)||{}).name||"Sem associação";totals[nm]=(totals[nm]||0)+t.amt});const rows=Object.entries(totals).sort((a,b)=>b[1]-a[1]);fs.innerHTML=rows.length?`<div class="family-summary"><h4>Despesas por pessoa — ${esc(month)}</h4>${rows.map(([n,v])=>`<div class="bh"><span>${esc(n)}</span><strong>${money(v)}</strong></div>`).join("")}<div class="bh" style="padding-top:8px"><strong>Total de despesas</strong><strong>${money(sum(expenses,t=>t.amt))}</strong></div></div>`:""}
  }else if(tab==="sales"){
   h=S.sales.filter(s=>s.date.slice(0,7)===month).reverse().sort((a,b)=>b.date.localeCompare(a.date)).map(s=>{const f=s.total-s.paid;
    return row("🧾",esc(s.desc)+tag(s),`${s.qty} × ${money(s.total/s.qty)} · ${fd(s.date)}<br>Recebido ${money(s.paid)}${f?` · <span class="exp">Em falta ${money(f)}</span>`:""}`,money(s.total),(f?`<button class="secondary small" data-a="pay" data-id="${esc(s.id)}">Receber</button>`:"")+delb("sale",s.id))}).join("");
@@ -497,14 +504,43 @@ function mv(k,d){const g=KEYS.cards.includes(k)?"cards":"charts",o=ord(g),i=o.in
 function custom(){const h=pf().hide,grp=(t,g)=>`<h3 style="margin:16px 0 6px">${t}</h3>`+ord(g).map(k=>`<div class="tx"><label style="display:flex;gap:10px;align-items:center;flex:1;margin:0;font-size:14px;color:var(--ink)"><input type="checkbox" style="width:auto" data-a="vis" data-id="${esc(k)}" ${h.includes(k)?"":"checked"}>${esc(k)}</label><button class="secondary small" data-a="up" data-id="${esc(k)}" aria-label="Subir">↑</button><button class="secondary small" data-a="dn" data-id="${esc(k)}" aria-label="Descer">↓</button></div>`).join("");
  $("#cust").innerHTML=`<section class="panel"><h3>Personalizar painel</h3><p class="mu" style="font-size:13px;margin:0">Escolhe o que mostrar e a ordem. Fica guardado na tua conta.</p>${grp("Cartões","cards")}${grp("Gráficos","charts")}<h3 style="margin:16px 0 6px">Tamanho dos movimentos</h3><div class="field"><label for="moveSize">Tamanho dos registos e controlos</label><select id="moveSize"><option value="compact" ${pf().moveSize==="compact"?"selected":""}>Compacto</option><option value="normal" ${(!pf().moveSize||pf().moveSize==="normal")?"selected":""}>Normal</option><option value="large" ${pf().moveSize==="large"?"selected":""}>Grande</option></select></div>${catsUI()}<div style="margin-top:14px;display:flex;gap:8px"><button class="danger small" data-a="rst">Repor painel</button><button class="secondary small" data-a="cust">Fechar</button></div></section>`}
 function profileOpen(){
- const m=$("#md"),meta=(user&&user.user_metadata)||{},name=meta.full_name||meta.name||"";
- m.hidden=false;m.innerHTML=`<div class="mbox" role="dialog" aria-modal="true" aria-label="Editar perfil"><h3 style="margin:0 0 12px">O meu perfil</h3><form data-f="profile"><div class="field"><label for="profileName">Nome de apresentação</label><input id="profileName" maxlength="80" autocomplete="name" value="${esc(name)}" placeholder="Como queres ser identificado?"></div><div class="field" style="margin-top:12px"><label for="profileEmail">E-mail da conta</label><input id="profileEmail" type="email" value="${esc((user&&user.email)||"")}" readonly><small class="mu">O e-mail não é alterado aqui, porque a alteração pode exigir confirmação.</small></div><div class="row2"><button class="primary" style="flex:1">Guardar perfil</button><button type="button" class="secondary" data-a="mclose">Fechar</button></div></form></div>`;
+ const m=$("#md"),meta=(user&&user.user_metadata)||{},name=(S&&S.profileName)||meta.full_name||meta.name||"",photo=(S&&S.profilePhoto)||"";
+ const members=(mode==="personal"&&S&&Array.isArray(S.members))?S.members:[];
+ const avatar=photo?`<img src="${esc(photo)}" alt="Foto do perfil">`:`<span>${esc((name||"?").trim().slice(0,1).toUpperCase())}</span>`;
+ m.hidden=false;m.innerHTML=`<div class="mbox" role="dialog" aria-modal="true" aria-label="Editar perfil"><h3 style="margin:0 0 12px">O meu perfil</h3>
+ <div class="profile-head"><div class="profile-avatar" id="profileAvatar">${avatar}</div><div style="flex:1;min-width:0"><strong>${esc(name||"O teu perfil")}</strong><p class="mu" style="font-size:12px;margin:4px 0 8px">Podes adicionar uma fotografia; é opcional.</p>${mode?`<label for="profilePhotoFile">Fotografia do perfil</label><input id="profilePhotoFile" type="file" accept="image/*">`:""}</div></div>
+ <form data-f="profile"><div class="field"><label for="profileName">Nome de apresentação</label><input id="profileName" maxlength="80" autocomplete="name" value="${esc(name)}" placeholder="Como queres ser identificado?"></div><div class="field" style="margin-top:12px"><label for="profileEmail">E-mail da conta</label><input id="profileEmail" type="email" value="${esc((user&&user.email)||"")}" readonly><small class="mu">O e-mail não é alterado aqui, porque a alteração pode exigir confirmação.</small></div><div class="row2"><button class="primary" style="flex:1">Guardar perfil</button><button type="button" class="secondary" data-a="mclose">Fechar</button></div></form>
+ ${mode==="personal"?`<section style="margin-top:24px;border-top:1px solid var(--ln);padding-top:18px"><h3 style="margin:0 0 6px">Família e pessoas a teu cargo</h3><p class="mu" style="font-size:13px;margin:0 0 12px">Adiciona familiares para associares despesas e veres quanto gastas com cada pessoa. Não é obrigatório adicionar ninguém.</p>
+ <div class="fg"><div class="field"><label for="memberName">Nome do familiar</label><input id="memberName" maxlength="70" placeholder="Ex.: Ana dos Reis"></div><div class="field"><label for="memberRelation">Relação</label><select id="memberRelation"><option value="">Selecionar (opcional)</option><option>Filho/a</option><option>Cônjuge / companheiro/a</option><option>Mãe</option><option>Pai</option><option>Irmão / irmã</option><option>Outro familiar</option><option>Pessoa a meu cargo</option></select></div><div class="field w"><button type="button" class="secondary full" data-a="memberadd">+ Adicionar familiar</button></div></div>
+ <h4 style="margin:18px 0 6px">Pessoas registadas (${members.length})</h4>${members.map(x=>`<div class="family-card"><div class="profile-avatar" style="width:42px;height:42px;flex-basis:42px;font-size:16px">${esc((x.name||"?").trim().slice(0,1).toUpperCase())}</div><div class="fc-main"><strong>${esc(x.name)}</strong><small>${esc(x.relation||"Familiar")}</small></div><div class="fc-actions"><button type="button" class="danger small" data-a="memberdel" data-id="${esc(x.id)}">Remover</button></div></div>`).join("")||'<div class="empty">Ainda não adicionaste familiares.</div>'}</section>`:""}</div>`;
+}
+async function compressProfilePhoto(file){
+ if(!file||!file.type||!file.type.startsWith("image/"))throw new Error("Escolhe um ficheiro de imagem.");
+ if(file.size>12*1024*1024)throw new Error("A fotografia deve ter menos de 12 MB.");
+ const src=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error("Não foi possível ler a fotografia."));r.readAsDataURL(file)});
+ const img=await new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>reject(new Error("O ficheiro de imagem não é válido."));i.src=src});
+ const max=320,scale=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=Math.max(1,Math.round(img.width*scale));c.height=Math.max(1,Math.round(img.height*scale));c.getContext("2d").drawImage(img,0,0,c.width,c.height);return c.toDataURL("image/jpeg",.78);
 }
 async function profileSave(){
  const name=$("#profileName").value.trim();if(!name)return toast("Escreve o nome que queres usar.");
- const b=$("#md form button.primary");if(b)b.disabled=true;
- try{const r=await sb.auth.updateUser({data:{full_name:name}});if(r.error)throw r.error;user=r.data.user||user;$("#md").hidden=true;$("#md").innerHTML="";toast("Perfil atualizado.");if(mode)shell();else gate()}
- catch(e){if(b)b.disabled=false;toast("Não foi possível atualizar o perfil: "+(e.message||"tenta novamente."))}
+ const b=$("#md form button.primary"),file=$("#profilePhotoFile")&&$("#profilePhotoFile").files[0];if(b)b.disabled=true;
+ try{
+  const update={full_name:name};
+  const r=await sb.auth.updateUser({data:update});if(r.error)throw r.error;user=r.data.user||user;
+  if(S&&mode){S.profileName=name;if(file)S.profilePhoto=await compressProfilePhoto(file);save()}
+  $("#md").hidden=true;$("#md").innerHTML="";toast("Perfil atualizado.");if(mode)shell();else gate();
+ }catch(e){if(b)b.disabled=false;toast("Não foi possível guardar o perfil: "+(e.message||"tenta novamente."))}
+}
+function memberAdd(){
+ if(mode!=="personal"||!S)return toast("Os familiares só podem ser geridos no modo Particular / Família.");
+ const name=$("#memberName").value.trim(),relation=$("#memberRelation").value;if(!name)return toast("Escreve o nome do familiar.");
+ S.members=Array.isArray(S.members)?S.members:[];if(S.members.some(x=>x.name.toLocaleLowerCase("pt")===name.toLocaleLowerCase("pt")))return toast("Já existe um familiar com esse nome.");
+ S.members.push({id:uid(),name,relation,createdAt:new Date().toISOString()});save();profileOpen();toast("Familiar adicionado.");
+}
+function memberDelete(id){
+ const m=(S.members||[]).find(x=>x.id===id);if(!m)return;
+ if(!confirm("Remover "+m.name+" da lista? As despesas antigas mantêm o nome associado."))return;
+ S.members=S.members.filter(x=>x.id!==id);save();profileOpen();toast("Familiar removido.");
 }
 function notesOpen(editId=null){
  S.notes=Array.isArray(S.notes)?S.notes:[];const item=editId?S.notes.find(n=>n.id===editId):null,m=$("#md");
@@ -541,8 +577,8 @@ const forms={
   if(ed&&ed.k==="doc"){const d=S.docs.find(x=>x.id===ed.id);if(!d||d.status!=="draft")return bad("Só rascunhos podem ser editados.");Object.assign(d,o);ed=null}
   else S.docs.push({id:uid(),status:"draft",date:ld(new Date()),paid:[],log:[["criado",new Date().toISOString()]],...o})},
  cat(){const t=$("#cty").value,n=val("cnm");if(!n)return bad("Escreve o nome da categoria.");const p=pf();p.cats=p.cats||{};if([...CAT[t],...(p.cats[t]||[]).map(c=>c.n)].some(x=>x.toLowerCase()===n.toLowerCase()))return bad("Essa categoria já existe.");(p.cats[t]=p.cats[t]||[]).push({n,arch:false});setTimeout(()=>{custom();refreshCats()},0)},
- tx(){const d=val("ds"),a=Math.round(num("am")),dt=$("#dt").value;if(!d||!(a>0)||!dt)return bad("Confirma a descrição, o valor e a data.");
-  const o={type:$("#ty").value,desc:d,amt:a,date:dt,cat:$("#ct").value};if(ed&&ed.k==="tx"){const t=S.tx.find(x=>x.id===ed.id);if(t)Object.assign(t,o,{upd:new Date().toISOString()});ed=null}else S.tx.push({id:uid(),...o});setMonth(dt)},
+ tx(){const d=val("ds"),a=Math.round(num("am")),dt=$("#dt").value,memberId=$("#memberId")?$("#memberId").value:"",member=(S.members||[]).find(x=>x.id===memberId);if(!d||!(a>0)||!dt)return bad("Confirma a descrição, o valor e a data.");
+  const o={type:$("#ty").value,desc:d,amt:a,date:dt,cat:$("#ct").value,memberId:member?member.id:"",memberName:member?member.name:""};if(ed&&ed.k==="tx"){const t=S.tx.find(x=>x.id===ed.id);if(t)Object.assign(t,o,{upd:new Date().toISOString()});ed=null}else S.tx.push({id:uid(),...o});setMonth(dt)},
  goal(){const t=Math.max(0,Math.round(num("gt")||0)),m=Math.max(0,Math.round(num("gm")||0)),d=$("#gd").value;S.goal.target=t;S.goal.monthly=m;S.goal.deadline=/^\d{4}-\d{2}$/.test(d)?d:"";setTimeout(()=>{body();update()},0)},
  contrib(){const a=Math.round(num("gc"));if(!(a>0))return bad("Introduz um valor maior que zero.");S.goal.saved+=a;(S.goal.hist=S.goal.hist||[]).push({d:ld(new Date()),a});if(S.goal.hist.length>200)S.goal.hist.shift()},
  bud(){const a=Math.round(num("bl"));if(!(a>0))return bad("Introduz um limite maior que zero.");S.bud[$("#bc").value]=a},
@@ -564,6 +600,7 @@ document.addEventListener("submit",e=>{
 });
 document.addEventListener("change",e=>{
  const t=e.target;
+ if(t.id==="profilePhotoFile"){const f=t.files&&t.files[0];if(f&&f.type.startsWith("image/")){const u=URL.createObjectURL(f),av=$("#profileAvatar");if(av)av.innerHTML=`<img src="${u}" alt="Pré-visualização da fotografia">`}else if(f)toast("Escolhe um ficheiro de imagem.");return}
  if(t.id==="month"&&t.value){month=t.value;update()}
  else if(t.id==="ty")$("#ct").innerHTML=gopts(t.value);
  else if(t.id==="ft"){fl.t=t.value;list()}
@@ -592,6 +629,8 @@ document.addEventListener("click",e=>{
  const b=e.target.closest("[data-a]");if(!b)return;const a=b.dataset.a,id=b.dataset.id;
  if(a==="pnew")return pnew();
  if(a==="profile")return profileOpen();
+ if(a==="memberadd")return memberAdd();
+ if(a==="memberdel")return memberDelete(id);
  if(a==="notes")return notesOpen();
  if(a==="noteedit")return notesOpen(id);
  if(a==="notedel"){if(!confirm("Apagar este apontamento?"))return;S.notes=(S.notes||[]).filter(n=>n.id!==id);save();return notesOpen(),toast("Apontamento apagado.")}
@@ -653,7 +692,7 @@ document.addEventListener("click",e=>{
  if(a==="edit"){const k=b.dataset.k;ed={k,id};const it=k==="tx"?S.tx.find(x=>x.id===id):S.exp.find(x=>x.id===id);if(!it)return;
   if(k==="tx"){$("#ty").value=it.type;$("#ct").innerHTML=gopts(it.type)}else $("#ct").innerHTML=gopts("bexp");
   if(![...$("#ct").options].some(o=>o.value===it.cat))$("#ct").add(new Option(it.cat));
-  $("#ct").value=it.cat;$("#ds").value=it.desc;$("#am").value=it.amt;$("#dt").value=it.date;
+  $("#ct").value=it.cat;$("#ds").value=it.desc;$("#am").value=it.amt;$("#dt").value=it.date;if(k==="tx"&&$("#memberId"))$("#memberId").value=it.memberId||"";
   const pb=$("#body form .primary");if(pb)pb.textContent="Guardar alterações";$("#ds").scrollIntoView({behavior:"smooth",block:"center"});$("#ds").focus();return}
  if(a==="carch"){const[t,n]=id.split("|"),c=((pf().cats||{})[t]||[]).find(x=>x.n===n);if(c){c.arch=!c.arch;save();refreshCats();custom()}return}
  if(a==="cust"){const c=$("#cust");if(c.innerHTML)c.innerHTML="";else custom();return}
