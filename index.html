@@ -167,7 +167,7 @@ function shell(){
  A.innerHTML=`<header><div class="brand"><div class="logo">₭</div><div><h1>Kamba Gestão</h1><p>${mode==="personal"?"Particular / Família":"Empresarial"}</p></div></div>
  <div class="hb"><span class="net st ok" role="status" aria-live="polite"></span><button class="secondary small" data-a="theme">Tema</button><button class="secondary small" data-a="profile">Perfil</button><button class="secondary small" data-a="notes">Bloco de notas</button><button class="secondary small" data-a="mydocs">Documentos</button><button class="secondary small" data-a="exp">Exportar</button><button class="secondary small" data-a="sw">Trocar modo</button></div></header>
  <main><button class="fab" data-a="fab">+ Nova transação</button><div id="fabm"></div><div class="topline"><h2>Visão geral</h2><div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap"><button class="secondary" data-a="cust">Personalizar painel</button><div class="field" style="width:190px"><label for="month">Mês em análise</label><input id="month" type="month" value="${month}"></div></div></div><div id="cust"></div>
- <div id="cards" class="cards"></div><div id="alerts"></div><div id="charts" class="charts"></div><div id="body"></div></main>
+ <div id="cards" class="cards"></div><div id="alerts"></div><div id="charts" class="charts"></div><div id="insights"></div><div id="body"></div></main>
  <footer>${mode==="personal"?"Os cálculos servem para organização pessoal e não constituem aconselhamento financeiro.":"Documentos e valores são de gestão interna, não são faturas fiscais válidas em Angola. O saldo de caixa conta o recebido pelo mês da venda e não inclui compras de stock. O resultado estimado usa o custo dos produtos vendidos."} Exporta uma cópia dos dados regularmente.</footer><button class="cloud-help" data-a="cloudhelp" aria-label="Ajuda, planos e privacidade">☁️ <span>Ajuda e privacidade</span></button>`;
  body();update();
 }
@@ -212,6 +212,7 @@ function body(){
    prod:`<form data-f="prod"><div class="fg"><div class="field w"><label for="pn">Nome</label><input id="pn" required maxlength="60"></div>
    <div class="field"><label for="pc">Custo (Kz)</label><input id="pc" type="number" min="0" step="1" required></div><div class="field"><label for="pp">Preço de venda (Kz)</label><input id="pp" type="number" min="1" step="1" required></div>
    <div class="field"><label for="ps">Stock inicial</label><input id="ps" type="number" min="0" step="1" value="0" required></div><div class="field"><label for="pm">Stock mínimo</label><input id="pm" type="number" min="0" step="1" value="0" required></div>
+   <div class="field w"><label for="pexp">Validade (opcional)</label><input id="pexp" type="date"><small class="mu">Para produtos com prazo de validade. A aplicação avisa quando estiver perto de vencer ou vencido.</small></div>
    <div class="field w"><button class="primary full">Guardar produto</button></div></div></form>`};
   $("#body").innerHTML=`<div class="layout"><section class="panel"><div class="tabs" role="tablist">${T.map(([k,n])=>`<button type="button" role="tab" aria-selected="${tab===k}" class="${tab===k?"on":""}" data-a="tab" data-id="${k}">${n}</button>`).join("")}</div>${forms[tab]}</section>
   <section class="panel"><h3>${T.find(t=>t[0]===tab)[1]}${tab==="prod"?"":" do mês"}</h3><div id="list"></div>${demo}</section></div>`;
@@ -235,8 +236,13 @@ function alerts(){
  const a=[];if(!navigator.onLine)a.push(["warn","Estás offline: as alterações ficam só neste dispositivo e são enviadas quando a ligação voltar."]);if(!ENT[mode])a.push(["bad","Subscrição inativa: só consulta e exportação. As alterações não são guardadas. Renova em «Plano e pagamentos»."]);
  if(mode==="personal"){const m=mtx();Object.entries(S.bud).forEach(([k,l])=>{const p=sum(m.filter(t=>t.type==="expense"&&t.cat===k),t=>t.amt)/l*100;
   if(p>100)a.push(["bad",`Ultrapassaste o limite de ${k} (${Math.round(p)}%). Considera rever o orçamento.`]);else if(p>=80)a.push(["warn",`Estás perto do limite de ${k} (${Math.round(p)}%).`])})}
- else{S.prod.filter(p=>p.stock<=p.min).forEach(p=>a.push(["warn",`Stock baixo: ${p.name} (${p.stock} em stock, mínimo ${p.min}).`]));
-  const n=S.sales.filter(s=>s.paid<s.total).length;if(n)a.push(["warn",`${n} venda(s) com pagamento em falta.`])}
+ else{
+  S.prod.filter(p=>Number(p.stock)<=Number(p.min)).forEach(p=>a.push(["warn",`Stock baixo: ${p.name} (${p.stock} em stock, mínimo ${p.min}).`]));
+  const today=ld(new Date()),soon=addDays(today,30);
+  S.prod.filter(p=>p.expiry&&p.expiry<today&&Number(p.stock)>0).forEach(p=>a.push(["bad",`Produto vencido: ${p.name} — validade ${fd(p.expiry)}. Verifica e não vendas unidades impróprias.`]));
+  S.prod.filter(p=>p.expiry&&p.expiry>=today&&p.expiry<=soon&&Number(p.stock)>0).forEach(p=>a.push(["warn",`Validade próxima: ${p.name} — ${fd(p.expiry)}. Prioriza a verificação deste stock.`]));
+  const n=S.sales.filter(s=>s.paid<s.total).length;if(n)a.push(["warn",`${n} venda(s) com pagamento em falta.`])
+ }
  $("#alerts").innerHTML=a.map(([c,m])=>`<div class="al ${c}" role="alert">${esc(m)}</div>`).join("");
 }
 const row=(ic,t,sub,amt,btns)=>`<div class="tx"><div class="ti" aria-hidden="true">${ic}</div><div class="tb"><strong>${t}</strong><small>${sub}</small></div><div class="ta">${amt}<div>${btns}</div></div></div>`;
@@ -256,7 +262,7 @@ function list(){
  }else if(tab==="docs"){h=docList()}else if(tab==="exp"){
   h=S.exp.filter(e=>e.date.slice(0,7)===month).reverse().sort((a,b)=>b.date.localeCompare(a.date)).map(e=>row(ICO[e.cat]||"🧾",esc(e.desc)+tag(e),`${esc(e.cat)} · ${fd(e.date)}`,`<span class="exp">− ${money(e.amt)}</span>`,editb("exp",e.id)+delb("exp",e.id))).join("");
  }else{
-  h=S.prod.map(p=>row("📦",esc(p.name)+tag(p),`Custo ${money(p.cost)} · Venda ${money(p.price)} · Margem ${money(p.price-p.cost)}<br>Stock: <strong class="${p.stock<=p.min?"exp":""}">${p.stock}</strong> (mín. ${p.min})`,"",`<button class="secondary small" data-a="stock" data-id="${esc(p.id)}">+ Stock</button>`+delb("prod",p.id))).join("");
+  h=S.prod.map(p=>row("📦",esc(p.name)+tag(p),`Custo ${money(p.cost)} · Venda ${money(p.price)} · Margem ${money(p.price-p.cost)}<br>Stock: <strong class="${p.stock<=p.min?"exp":""}">${p.stock}</strong> (mín. ${p.min})${p.expiry?`<br>Validade: <strong class="${p.expiry<ld(new Date())?"exp":""}">${fd(p.expiry)}</strong>`:""}`,"",`<button class="secondary small" data-a="stock" data-id="${esc(p.id)}">+ Stock</button>`+delb("prod",p.id))).join("");
  }
  $("#list").innerHTML=h||E;
 }
@@ -296,6 +302,31 @@ function charts(){
  const bars=D.map(([a,b],i)=>{const ha=a/mx*90,hb=b/mx*90,x=i*50+5;return `<rect x="${x}" y="${105-ha}" width="17" height="${ha}" rx="3" style="fill:var(--g)"/><rect x="${x+20}" y="${105-hb}" width="17" height="${hb}" rx="3" style="fill:var(--rd)"/><text x="${x+19}" y="122" text-anchor="middle" font-size="10" fill="currentColor">${ms[i][1]}</text>`}).join("");
  const DN=donut(P?"Despesas por categoria":"Vendas por produto",items),BR=`<section class="panel"><h3>${P?"Receitas e despesas":"Faturação e despesas"} (6 meses)</h3>${all?`<svg viewBox="0 0 300 128" width="100%" role="img" aria-label="Gráfico de barras dos últimos 6 meses">${bars}</svg><div class="bl"><span><i style="background:var(--g)"></i>${P?"Receitas":"Faturação"}</span><span><i style="background:var(--rd)"></i>Despesas</span></div>`:'<div class="empty">Sem dados nos últimos 6 meses.</div>'}</section>`;
  KEYS.charts=["Distribuição","Evolução 6 meses"];$("#charts").innerHTML=applyPrefs([["Distribuição",DN],["Evolução 6 meses",BR]]);
+}
+function insights(){
+ const root=$("#insights");if(!root)return;
+ const previousMonth=(()=>{const d=new Date(Number(month.slice(0,4)),Number(month.slice(5,7))-2,1);return ld(d).slice(0,7)})();
+ const fmtMonth=m=>{const [y,mo]=m.split("-").map(Number);return new Date(y,mo-1,1).toLocaleDateString("pt-PT",{month:"long",year:"numeric"})};
+ const change=(cur,prev)=>{if(prev===0)return cur===0?"Sem alteração":"Sem base de comparação";const pct=Math.round((cur-prev)/prev*100);return `${pct>0?"+":""}${pct}% face ao mês anterior`};
+ let html="";
+ if(mode==="personal"){
+  const totals=m=>{const a=S.tx.filter(t=>t.date.slice(0,7)===m);return{inc:sum(a.filter(t=>t.type==="income"),t=>t.amt),exp:sum(a.filter(t=>t.type==="expense"),t=>t.amt)}};
+  const cur=totals(month),prev=totals(previousMonth),ce=S.tx.filter(t=>t.date.slice(0,7)===month&&t.type==="expense"),pe=S.tx.filter(t=>t.date.slice(0,7)===previousMonth&&t.type==="expense"),cats={};ce.forEach(t=>cats[t.cat]=(cats[t.cat]||0)+t.amt);
+  const top=Object.entries(cats).sort((a,b)=>b[1]-a[1])[0];
+  const cards=[ ["Receitas",cur.inc,prev.inc], ["Despesas",cur.exp,prev.exp], ["Saldo",cur.inc-cur.exp,prev.inc-prev.exp] ];
+  html=`<section class="panel" style="margin-bottom:14px"><h3>Comparação mensal</h3><p class="mu" style="margin:4px 0 12px">${esc(fmtMonth(month))} comparado com ${esc(fmtMonth(previousMonth))}. Só usa os movimentos registados.</p><div class="cards">${cards.map(([n,c,p])=>`<div class="card"><div class="lb">${n}</div><div class="val ${n==="Despesas"?"exp":n==="Receitas"?"inc":""}">${money(c)}</div><div class="ht">Mês anterior: ${money(p)}<br>${esc(change(c,p))}</div></div>`).join("")}</div><div class="note" style="margin-top:12px">${top?`A categoria com mais despesas neste mês é <strong>${esc(top[0])}</strong> (${money(top[1])}).`:"Ainda não há despesas registadas neste mês."} ${cur.exp>prev.exp?"As despesas aumentaram; revê os movimentos e os limites por categoria.":cur.exp<prev.exp?"As despesas diminuíram em relação ao mês anterior.":"Compara novamente quando houver novos movimentos."}</div></section>`;
+ }else{
+  const sales=S.sales.filter(s=>s.date.slice(0,7)===month),expenses=S.exp.filter(e=>e.date.slice(0,7)===month),revenue=sum(sales,s=>s.total),paid=sum(sales,s=>s.paid),cost=sum(sales,s=>s.cost),out=sum(expenses,e=>e.amt),margin=revenue-cost,unpaid=sum(sales,s=>Math.max(0,s.total-s.paid));
+  const tips=[];
+  if(!S.prod.length)tips.push("Regista os teus produtos com custo, preço e stock para estimar melhor as margens.");
+  const low=S.prod.filter(p=>Number(p.stock)<=Number(p.min));if(low.length)tips.push(`${low.length} produto(s) atingiram o stock mínimo. Confirma as vendas recentes antes de repor mercadoria.`);
+  const negative=S.prod.filter(p=>Number(p.price)-Number(p.cost)<=0);if(negative.length)tips.push(`${negative.length} produto(s) têm preço igual ou inferior ao custo registado. Revê os preços e os custos antes de concluir que há lucro.`);
+  if(unpaid>0)tips.push(`Há ${money(unpaid)} por receber nas vendas registadas. Confirma com os clientes e regista os recebimentos quando acontecerem.`);
+  if(revenue>0&&margin<out)tips.push("Neste mês, a margem bruta estimada não cobre as despesas operacionais registadas. Analisa custos e despesas antes de assumir que o negócio é rentável.");
+  if(!tips.length)tips.push("Mantém os custos, vendas e recebimentos atualizados. As sugestões dependem da qualidade e da quantidade dos registos.");
+  html=`<section class="panel" style="margin-bottom:14px"><h3>Sugestões para a gestão do negócio</h3><p class="mu" style="margin:4px 0 12px">Análise de ${esc(fmtMonth(month))}, baseada apenas nos dados registados. São alertas de gestão, não garantias de lucro.</p><div class="cards"><div class="card"><div class="lb">Margem bruta estimada</div><div class="val ${margin<0?"exp":""}">${money(margin)}</div><div class="ht">Vendas menos custo das mercadorias registado</div></div><div class="card"><div class="lb">Despesas operacionais</div><div class="val exp">${money(out)}</div><div class="ht">Despesas registadas no mês</div></div><div class="card"><div class="lb">Por receber</div><div class="val">${money(unpaid)}</div><div class="ht">Vendas ainda não pagas na totalidade</div></div></div><ul style="margin:12px 0 0;padding-left:22px">${tips.map(t=>`<li style="margin:6px 0">${esc(t)}</li>`).join("")}</ul></section>`;
+ }
+ root.innerHTML=html;
 }
 function refreshCats(){const c=$("#ct");if(c&&!ed)c.innerHTML=gopts(mode==="personal"?$("#ty").value:"bexp");const b=$("#bc");if(b)b.innerHTML=gopts("expense")}
 function catsUI(){const cs=pf().cats||{},L=Object.entries(cs).flatMap(([t,a])=>a.map(c=>[t,c])).filter(([t])=>mode==="personal"?t!=="bexp":t==="bexp");
@@ -339,7 +370,7 @@ const DS={
  tx:{t:"Movimentos",rows:()=>S.tx,date:1,cols:[["date","Data",r=>r.date,r=>fd(r.date)],["desc","Descrição",r=>r.desc],["cat","Categoria",r=>r.cat],["type","Tipo",r=>r.type==="income"?"Receita":"Despesa"],["amt","Valor (Kz)",r=>r.amt,r=>money(r.amt),1]]},
  sales:{t:"Vendas",rows:()=>S.sales,date:1,cols:[["date","Data",r=>r.date,r=>fd(r.date)],["desc","Descrição",r=>r.desc],["qty","Qtd",r=>r.qty,null,1],["total","Total (Kz)",r=>r.total,r=>money(r.total),1],["paid","Recebido (Kz)",r=>r.paid,r=>money(r.paid),1],["due","Em falta (Kz)",r=>r.total-r.paid,r=>money(r.total-r.paid),1]]},
  exp:{t:"Despesas",rows:()=>S.exp,date:1,cols:[["date","Data",r=>r.date,r=>fd(r.date)],["desc","Descrição",r=>r.desc],["cat","Categoria",r=>r.cat],["amt","Valor (Kz)",r=>r.amt,r=>money(r.amt),1]]},
- prod:{t:"Produtos",rows:()=>S.prod,date:0,cols:[["name","Produto",r=>r.name],["cost","Custo (Kz)",r=>r.cost,r=>money(r.cost),1],["price","Preço (Kz)",r=>r.price,r=>money(r.price),1],["mg","Margem (Kz)",r=>r.price-r.cost,r=>money(r.price-r.cost),1],["stock","Stock",r=>r.stock,null,1],["min","Mínimo",r=>r.min,null,1]]},
+ prod:{t:"Produtos",rows:()=>S.prod,date:0,cols:[["name","Produto",r=>r.name],["cost","Custo (Kz)",r=>r.cost,r=>money(r.cost),1],["price","Preço (Kz)",r=>r.price,r=>money(r.price),1],["mg","Margem (Kz)",r=>r.price-r.cost,r=>money(r.price-r.cost),1],["stock","Stock",r=>r.stock,null,1],["min","Mínimo",r=>r.min,null,1],["expiry","Validade",r=>r.expiry||"Sem data",r=>r.expiry?fd(r.expiry):"Sem data"]]},
  docs:{t:"Documentos",rows:()=>S.docs,date:1,cols:[["date","Data",r=>r.date,r=>fd(r.date)],["num","Número",r=>r.number||""],["type","Tipo",r=>TN[r.type]],["client","Cliente",r=>r.client],["total","Total (Kz)",r=>r.total,r=>money(r.total),1],["paid","Pago (Kz)",r=>sum(r.paid||[],x=>x.amt),r=>money(sum(r.paid||[],x=>x.amt)),1],["st","Estado",r=>dst(r)[0],r=>`<span class="st ${dst(r)[1]}">${dst(r)[0]}</span>`]]}
 };
 function tblData(){const d=DS[TB.ds],pr=pf();pr.tables=pr.tables||{};const tp=pr.tables[TB.ds]=pr.tables[TB.ds]||{order:[],hide:[]};
@@ -568,7 +599,7 @@ function noteSave(){
  else S.notes.push({id:uid(),title,text:textVal,createdAt:now,updatedAt:now});
  save();notesOpen();toast("Apontamento guardado.");
 }
-function update(){cards();alerts();charts();list();document.documentElement.dataset.moveSize=(S.prefs&&S.prefs.moveSize)||"normal";if(mode==="personal"){goalUI();budUI()}}
+function update(){cards();alerts();charts();insights();list();document.documentElement.dataset.moveSize=(S.prefs&&S.prefs.moveSize)||"normal";if(mode==="personal"){goalUI();budUI()}}
 
 const num=id=>Number($("#"+id).value),val=id=>$("#"+id).value.trim();
 const bad=m=>{toast(m);return true};
@@ -602,8 +633,8 @@ const forms={
   S.sales.push({id:uid(),date:dt,desc:d,pid,qty:q,total,paid,cost});setMonth(dt);body()},
  bexp(){const d=val("ds"),a=Math.round(num("am")),dt=$("#dt").value;if(!d||!(a>0)||!dt)return bad("Confirma a descrição, o valor e a data.");
   const o={date:dt,desc:d,cat:$("#ct").value,amt:a};if(ed&&ed.k==="exp"){const x=S.exp.find(y=>y.id===ed.id);if(x)Object.assign(x,o,{upd:new Date().toISOString()});ed=null}else S.exp.push({id:uid(),...o});setMonth(dt)},
- prod(){const n=val("pn"),c=Math.round(num("pc")),p=Math.round(num("pp")),s=Math.round(num("ps")),m=Math.round(num("pm"));
-  if(!n||!(c>=0)||!(p>0)||!(s>=0)||!(m>=0))return bad("Confirma o nome, custo, preço e stock.");S.prod.push({id:uid(),name:n,cost:c,price:p,stock:s,min:m})}
+ prod(){const n=val("pn"),c=Math.round(num("pc")),p=Math.round(num("pp")),s=Math.round(num("ps")),m=Math.round(num("pm")),expiry=$("#pexp")?$("#pexp").value:"";
+  if(!n||!(c>=0)||!(p>0)||!(s>=0)||!(m>=0))return bad("Confirma o nome, custo, preço e stock.");S.prod.push({id:uid(),name:n,cost:c,price:p,stock:s,min:m,expiry:/^\d{4}-\d{2}-\d{2}$/.test(expiry)?expiry:""})}
 };
 function setMonth(dt){month=dt.slice(0,7);$("#month").value=month}
 document.addEventListener("submit",e=>{
