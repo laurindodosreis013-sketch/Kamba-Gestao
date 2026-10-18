@@ -80,12 +80,7 @@ textarea{width:100%;border:1px solid var(--ln);border-radius:10px;padding:11px 1
 <script>
 (()=>{
 const SB_URL="https://cqbvwjtgilnsnnplnbbr.supabase.co",SB_KEY="sb_publishable_IST8t394Xz3XF0pAAP-Xig_c3OPhqWd";
-let VKEY=null;const AUTHK="kamba_vault_auth";
-const authStore={
- async getItem(k){try{if(VKEY){const t=localStorage.getItem(AUTHK);if(t){const m=await vOpen(VKEY,t,"auth");if(k in m)return m[k]}}return sessionStorage.getItem("kamba_auth_"+k)}catch(e){return null}},
- async setItem(k,v){try{if(VKEY){const t=localStorage.getItem(AUTHK);let m={};if(t){try{m=await vOpen(VKEY,t,"auth")}catch(e){}}m[k]=v;localStorage.setItem(AUTHK,await vSeal(VKEY,m,"auth"));sessionStorage.removeItem("kamba_auth_"+k)}else sessionStorage.setItem("kamba_auth_"+k,v)}catch(e){}},
- async removeItem(k){try{sessionStorage.removeItem("kamba_auth_"+k);if(VKEY){const t=localStorage.getItem(AUTHK);if(t){const m=await vOpen(VKEY,t,"auth");delete m[k];localStorage.setItem(AUTHK,await vSeal(VKEY,m,"auth"))}}}catch(e){}}};
-const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY,{auth:{storage:authStore,persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}):null;
+const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;
 let SYNCING=0,PENDING=false,OFFV=false,DEFERRED=null,UPDW=null,UPD=false;
 let user=null,WS={},SUBS=[],PL={},HAS={personal:false,business:false},ENT={personal:false,business:false};
 const $=s=>document.querySelector(s),A=$("#app");
@@ -107,7 +102,7 @@ const ICO={"Alimentação":"🛒","Habitação":"🏠","Transporte":"🚗","Saú
 Object.assign(ICO,{"Cursos e formação":"📚","Restaurantes e takeaway": "🍽️", "Água": "💧", "Gás": "🔥", "Gerador e combustível": "⛽", "Recargas e dados móveis": "📱", "Casa e reparações": "🛠️", "Mobília e eletrodomésticos": "🛋️", "Empregada doméstica": "🧹", "Combustível": "⛽", "Táxi e candongueiro": "🚕", "Manutenção do carro": "🔧", "Seguros": "🛡️", "Medicamentos": "💊", "Consultas e exames": "🩺", "Propinas": "🎓", "Material escolar": "✏️", "Filhos": "🧒", "Apoio a familiares": "🤝", "Vestuário e calçado": "👕", "Cuidados pessoais": "💇", "Viagens": "✈️", "Assinaturas e TV": "📺", "Presentes e donativos": "🎁", "Animais de estimação": "🐾", "Impostos e taxas": "🏛️", "Poupança e investimentos": "🐷", "Empréstimos e prestações": "💳", "Pensão": "👴", "Bónus e comissões": "🏆", "Venda de bens": "🏷️", "Juros": "📈", "Reembolsos": "↩️", "Presentes recebidos": "🎁", "Telefone e dados": "📞", "Matéria-prima e consumíveis": "🧴", "Embalagens": "📦", "Publicidade e marketing": "📣", "Software e subscrições": "💻", "Contabilidade e serviços": "🧮", "Taxas bancárias": "🏦", "Licenças e alvarás": "📜", "Limpeza": "🧽", "Material de escritório": "🖇️", "Equipamentos": "🖨️", "Entregas e fretes": "🚚", "Comissões": "🏷️", "Formação": "📚", "Segurança": "🔒", "Outros": "🧾"});
 let mode=null,S,month=ld(new Date()).slice(0,7),tab="sales",fl={q:"",t:"all"},ed=null;
 function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display="none",2600)}
-const save=()=>{if(!mode||!S)return;diffOps();vPersist();clearTimeout(save.h);if(sb&&user&&WS[mode])save.h=setTimeout(syncNow,400);netUI()};
+const save=()=>{wr("kamba_v2_"+mode,S);if(sb&&user&&WS[mode]){clearTimeout(save.h);const m=mode,snap=S;save.h=setTimeout(async()=>{if(!navigator.onLine){PENDING=true;return}SYNCING++;netUI();const r=await sb.from("app_state").upsert({workspace_id:WS[m],data:snap,updated_at:new Date().toISOString()});SYNCING--;netUI();if(r.error)toast("Não foi possível sincronizar: "+r.error.message)},600)}};
 const th=rd("kamba_v2_theme");if(th)document.documentElement.dataset.theme=th;
 
 const price=c=>{const p=PL[c];return p&&p.active&&p.price?money(p.price)+(p.period_months===12?" por ano":" / "+p.period_months+" meses"):"Preço por definir"};
@@ -115,7 +110,7 @@ const PLN=c=>(PL[c]&&PL[c].name)||c;
 function gate(){
  mode=null;
  const has=m=>!!WS[m];
- A.innerHTML=`<div class="gate"><div class="logo">₭</div><h1>Kamba Gestão</h1><p class="mu">Como vais usar a aplicação?</p><p><span class="net st ok" role="status" aria-live="polite"></span></p><p class="mu">${esc(user.email)} · <button class="secondary small" data-a="out">Sair</button> <button class="secondary small" data-a="inst">Instalar a aplicação</button> <button class="secondary small" data-a="vault">Acesso offline protegido</button> <button class="secondary small" data-a="plano">Plano e pagamentos</button></p>
+ A.innerHTML=`<div class="gate"><div class="logo">₭</div><h1>Kamba Gestão</h1><p class="mu">Como vais usar a aplicação?</p><p><span class="net st ok" role="status" aria-live="polite"></span></p><p class="mu">${esc(user.email)} · <button class="secondary small" data-a="out">Sair</button> <button class="secondary small" data-a="inst">Instalar a aplicação</button> <button class="secondary small" data-a="plano">Plano e pagamentos</button></p>
  <div class="modes">
  <button class="mode" data-a="mode" data-m="personal"><span class="ico" aria-hidden="true">🏠</span><strong>Particular / Família</strong><small>Receitas, despesas, orçamento e metas de poupança do dia a dia.</small><span class="pr">${price("personal")}</span>${HAS.personal?"":"<em>🔒 Requer o plano</em>"}${has("personal")?"<em>Tem dados guardados</em>":""}</button>
  <button class="mode" data-a="mode" data-m="business"><span class="ico" aria-hidden="true">🏪</span><strong>Empresarial</strong><small>Vendas, caixa, stock, contas a receber e resultado estimado.</small><span class="pr">${price("business")}</span>${HAS.business?"":"<em>🔒 Requer o plano</em>"}${has("business")?"<em>Tem dados guardados</em>":""}</button>
@@ -124,16 +119,18 @@ function gate(){
 }
 async function enter(m){
  if(!HAS[m]){toast("Este módulo exige o plano "+PLN(m)+" (ou o Combo).");return payOpen()}
- toast("A carregar...");
- if(!WS[m]){if(!navigator.onLine)return toast("Precisas de internet para criar este espaço pela primeira vez.");
-  const id=uid(),r=await sb.from("workspaces").insert({id,kind:m,name:m==="personal"?"Particular":"Empresa"});if(r.error)return toast("Erro de ligação: "+r.error.message);WS[m]=id}
- const ok=await loadMode(m);if(!ok)return;
- if(m==="business"){S.docs=S.docs||[];S.biz=S.biz||{}}S.prefs=S.prefs||{hide:[],order:[]};
- tab="sales";fl={q:"",t:"all"};shell();vTouch();if(navigator.onLine)syncNow()
+ toast("A carregar...");let cloud=null;
+ try{if(!WS[m]){const id=uid(),r=await sb.from("workspaces").insert({id,kind:m,name:m==="personal"?"Particular":"Empresa"});if(r.error)throw r.error;WS[m]=id}
+  const r=await sb.from("app_state").select("data").eq("workspace_id",WS[m]).maybeSingle();if(r.error)throw r.error;cloud=r.data&&r.data.data&&Object.keys(r.data.data).length?r.data.data:null}
+ catch(e){return toast("Erro de ligação: "+(e.message||"tenta novamente."))}
+ mode=m;S=cloud||rd("kamba_v2_"+m);
+ if(!S){S=def(m);const o=m==="personal"&&rd("kamba_gestao_v1");
+  if(o&&Array.isArray(o.transactions)){S.tx=o.transactions.map(t=>({id:t.id,type:t.type,desc:t.description,amt:t.amount,date:t.date,cat:t.category}));S.bud=o.budgets||{};S.goal.target=Number(o.goal)||0}}
+ if(m==="business"){S.docs=S.docs||[];S.biz=S.biz||{}}tab="sales";fl={q:"",t:"all"};shell();if(!cloud)save();
 }
 function shell(){
  A.innerHTML=`<header><div class="brand"><div class="logo">₭</div><div><h1>Kamba Gestão</h1><p>${mode==="personal"?"Particular / Família":"Empresarial"}</p></div></div>
- <div class="hb"><span class="net st ok" role="status" aria-live="polite"></span><button class="secondary small" data-a="theme">Tema</button><button class="secondary small" data-a="syncp">Sincronização${SY.out.length?" ("+SY.out.length+")":""}</button><button class="secondary small" data-a="mydocs">Documentos</button><button class="secondary small" data-a="exp">Exportar</button><button class="secondary small" data-a="sw">Trocar modo</button></div></header>
+ <div class="hb"><span class="net st ok" role="status" aria-live="polite"></span><button class="secondary small" data-a="theme">Tema</button><button class="secondary small" data-a="mydocs">Documentos</button><button class="secondary small" data-a="exp">Exportar</button><button class="secondary small" data-a="sw">Trocar modo</button></div></header>
  <main><button class="fab" data-a="fab">+ Nova transação</button><div id="fabm"></div><div class="topline"><h2>Visão geral</h2><div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap"><button class="secondary" data-a="cust">Personalizar painel</button><div class="field" style="width:190px"><label for="month">Mês em análise</label><input id="month" type="month" value="${month}"></div></div></div><div id="cust"></div>
  <div id="cards" class="cards"></div><div id="alerts"></div><div id="charts" class="charts"></div><div id="body"></div></main>
  <footer>${mode==="personal"?"Os cálculos servem para organização pessoal e não constituem aconselhamento financeiro.":"Documentos e valores são de gestão interna, não são faturas fiscais válidas em Angola. O saldo de caixa conta o recebido pelo mês da venda e não inclui compras de stock. O resultado estimado usa o custo dos produtos vendidos."} Exporta uma cópia dos dados regularmente.</footer>`;
@@ -199,9 +196,7 @@ function cards(){
  KEYS.cards=CK.map(x=>x[0]);$("#cards").innerHTML=applyPrefs(CK);
 }
 function alerts(){
- const a=[];if(!navigator.onLine)a.push(["warn","Estás offline. Os valores mostrados são da última sincronização"+(SY.last?" ("+fdt(SY.last)+")":"")+(SY.out.length?" mais "+SY.out.length+" alteração(ões) por enviar":"")+". Não são saldos confirmados pelo servidor."+(VKEY?"":" Ativa o «Acesso offline protegido» para não perder alterações se fechares a aplicação.")]);
- else if(SY.out.length)a.push(["warn",SY.out.length+" alteração(ões) por sincronizar: os valores incluem-nas, mas o servidor ainda não as confirmou."]);
- if(SY.conf.length||SY.errs.length)a.push(["bad",(SY.conf.length?SY.conf.length+" conflito(s) de sincronização. ":"")+(SY.errs.length?SY.errs.length+" alteração(ões) recusada(s) pelo servidor. ":"")+"Abre «Sincronização» para resolver."]);if(!ENT[mode])a.push(["bad","Subscrição inativa: só consulta e exportação. As alterações não são guardadas. Renova em «Plano e pagamentos»."]);
+ const a=[];if(!navigator.onLine)a.push(["warn","Estás offline: as alterações ficam só neste dispositivo e são enviadas quando a ligação voltar."]);if(!ENT[mode])a.push(["bad","Subscrição inativa: só consulta e exportação. As alterações não são guardadas. Renova em «Plano e pagamentos»."]);
  if(mode==="personal"){const m=mtx();Object.entries(S.bud).forEach(([k,l])=>{const p=sum(m.filter(t=>t.type==="expense"&&t.cat===k),t=>t.amt)/l*100;
   if(p>100)a.push(["bad",`Ultrapassaste o limite de ${k} (${Math.round(p)}%). Considera rever o orçamento.`]);else if(p>=80)a.push(["warn",`Estás perto do limite de ${k} (${Math.round(p)}%).`])})}
  else{S.prod.filter(p=>p.stock<=p.min).forEach(p=>a.push(["warn",`Stock baixo: ${p.name} (${p.stock} em stock, mínimo ${p.min}).`]));
@@ -271,7 +266,7 @@ function docList(){
   const bt=d.status==="draft"?B("dedit","Editar")+B("dissue","Emitir","primary")+B("dprev","Pré-visualizar")+B("ddup","Duplicar")+delb("doc",d.id):B("dprev","Imprimir")+(d.status==="issued"&&pp&&pd<d.total?B("dpay","Receber","primary"):"")+B("ddup","Duplicar")+(d.status==="issued"?B("dcan","Cancelar","danger"):"");
   return row("📄",`${esc(TN[d.type])} ${esc(d.number||"(rascunho)")} · ${esc(d.client)}`,`${fd(d.date)}${d.due?" · vence "+fd(d.due):""}${pd?` · pago ${money(pd)}`:""}`,`${money(d.total)}<br><span class="st ${c}">${l}</span>`,bt)}).join("");
  return head+(r||'<div class="empty"><div style="font-size:40px" aria-hidden="true">📄</div><strong>Sem documentos neste mês</strong><br>Cria um rascunho no formulário.</div>')}
-async function issue(id){const d=S.docs.find(x=>x.id===id);if(!d||d.status!=="draft")return;if(!navigator.onLine)return toast("Emitir documentos exige internet: a numeração é feita no servidor.");
+async function issue(id){const d=S.docs.find(x=>x.id===id);if(!d||d.status!=="draft")return;
  if(d.type==="rci"&&!confirm(`Confirmas que recebeste ${money(d.total)}?`))return;
  if(!confirm("Emitir este documento? Depois de emitido, não pode ser editado."))return;
  const sr=SER[d.type],r=await sb.rpc("next_doc_number",{ws:WS[mode],ser:sr});
@@ -328,7 +323,7 @@ const PTv=c=>PL[c]&&PL[c].price?Number(PL[c].price):0;
 const instAmt=(pl,n,k)=>{const t=PTv(pl),b=Math.floor(t/n);return k===n?t-b*(n-1):b};
 function prevInst(){const e=$("#pi");if(!e)return;const pl=$("#pl").value,n=+$("#pn2").value;e.textContent=n===1?"Pagamento único: "+money(instAmt(pl,1,1)):n+" prestações de "+money(instAmt(pl,n,1))+", a última de "+money(instAmt(pl,n,n))+" (total "+money(PTv(pl))+", sem juros)."}
 const ERRBOX='<div style="max-width:720px;margin:0 auto"><div class="al bad">Não foi possível carregar. Já executaste as migrações 004 a 006 no Supabase?</div><button class="primary" data-a="tclose">Fechar</button></div>';
-async function payOpen(){if(!navigator.onLine)return toast("Os pagamentos e planos exigem ligação à internet.");const t=$("#tv");t.hidden=false;t.innerHTML='<div style="max-width:720px;margin:0 auto"><p class="mu">A carregar...</p></div>';
+async function payOpen(){const t=$("#tv");t.hidden=false;t.innerHTML='<div style="max-width:720px;margin:0 auto"><p class="mu">A carregar...</p></div>';
  const[a,,b,ad]=await Promise.all([sb.from("subscriptions").select("*"),loadPlans(),sb.from("payment_requests").select("*").order("created_at",{ascending:false}),sb.rpc("is_admin")]);
  if(a.error||b.error){t.innerHTML=ERRBOX;return}
  SUBS=a.data||[];entCalc();const rq=b.data||[],G={};rq.forEach(r=>(G[r.group_id]=G[r.group_id]||[]).push(r));
@@ -606,7 +601,7 @@ document.addEventListener("click",e=>{
  if(a==="rst"){S.prefs={hide:[],order:[]};save();update();custom();return toast("Painel reposto.")}
  if(a==="signup")return doAuth("signup");
  if(a==="reset"){const em=$("#em").value.trim();if(!em)return toast("Escreve o teu e-mail primeiro.");sb.auth.resetPasswordForEmail(em,{redirectTo:location.href.split("#")[0]});return toast("Se o e-mail existir, enviámos as instruções.")}
- if(a==="out"){(async()=>{if(SY.out.length&&!confirm("Tens "+SY.out.length+" alteração(ões) por sincronizar. Se saíres agora, perdem-se. Sair mesmo assim?"))return;await sb.auth.signOut();vWipe();try{localStorage.removeItem("kamba_gestao_v1");Object.keys(localStorage).filter(k=>k.startsWith("kamba_v2_")&&k!=="kamba_v2_theme").forEach(k=>localStorage.removeItem(k))}catch(x){}user=null;WS={};mode=null;S=null;SY=newSY();authView()})();return}
+ if(a==="out"){(async()=>{await sb.auth.signOut();try{Object.keys(localStorage).filter(k=>(k.startsWith("kamba_v2_")&&k!=="kamba_v2_theme")||k==="kamba_gestao_v1").forEach(k=>localStorage.removeItem(k))}catch(x){}user=null;WS={};authView()})();return}
  if(a==="mode")return enter(b.dataset.m);
  if(a==="sw")return gate();
  if(a==="theme"){const r=document.documentElement,cur=r.dataset.theme||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light"),n=cur==="dark"?"light":"dark";r.dataset.theme=n;wr("kamba_v2_theme",n);return}
