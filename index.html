@@ -104,17 +104,22 @@ textarea{width:100%;border:1px solid var(--ln);border-radius:10px;padding:11px 1
 @media(max-width:560px){.gate-actions{display:grid;grid-template-columns:1fr 1fr}.gate-actions button{width:100%;font-size:14px;padding:12px 9px}.gate-actions .plan-cta{grid-column:1/-1}.cloud-help{left:10px;bottom:10px;min-height:46px;padding:11px 14px;font-size:13px}.help-box{padding:16px}}
 
 </style>
+<link rel="stylesheet" href="extra_areas.css">
+<link rel="stylesheet" href="shared_areas.css">
 </head>
 <body>
 <div id="app"></div>
 <div class="toast" id="toast" role="status"></div>
 <div id="pv" hidden></div><div id="tv" hidden></div><div id="md" hidden></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
+<script src="extra_areas.js"></script>
+<script src="shared_areas.js"></script>
 <script>
 (()=>{
 const SB_URL="https://cqbvwjtgilnsnnplnbbr.supabase.co",SB_KEY="sb_publishable_IST8t394Xz3XF0pAAP-Xig_c3OPhqWd";
 const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;
 let SYNCING=0,PENDING=false,OFFV=false,DEFERRED=null,UPDW=null,UPD=false;
+let SESSION_EPOCH=0,ENTER_SEQ=0,SERVER_READY=["personal","business"],SERVER_IMPLEMENTED=[],COMMERCE_READY=false,TRANSFER_AVAILABLE=false;
 let user=null,WS={},SUBS=[],PL={},HAS={personal:false,business:false},ENT={personal:false,business:false};
 const $=s=>document.querySelector(s),A=$("#app");
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -135,42 +140,82 @@ const ICO={"Alimentação":"🛒","Habitação":"🏠","Transporte":"🚗","Saú
 Object.assign(ICO,{"Cursos e formação":"📚","Restaurantes e takeaway": "🍽️", "Água": "💧", "Gás": "🔥", "Gerador e combustível": "⛽", "Recargas e dados móveis": "📱", "Casa e reparações": "🛠️", "Mobília e eletrodomésticos": "🛋️", "Empregada doméstica": "🧹", "Combustível": "⛽", "Táxi e candongueiro": "🚕", "Manutenção do carro": "🔧", "Seguros": "🛡️", "Medicamentos": "💊", "Consultas e exames": "🩺", "Propinas": "🎓", "Material escolar": "✏️", "Filhos": "🧒", "Apoio a familiares": "🤝", "Vestuário e calçado": "👕", "Cuidados pessoais": "💇", "Viagens": "✈️", "Assinaturas e TV": "📺", "Presentes e donativos": "🎁", "Animais de estimação": "🐾", "Impostos e taxas": "🏛️", "Poupança e investimentos": "🐷", "Empréstimos e prestações": "💳", "Pensão": "👴", "Bónus e comissões": "🏆", "Venda de bens": "🏷️", "Juros": "📈", "Reembolsos": "↩️", "Presentes recebidos": "🎁", "Telefone e dados": "📞", "Matéria-prima e consumíveis": "🧴", "Embalagens": "📦", "Publicidade e marketing": "📣", "Software e subscrições": "💻", "Contabilidade e serviços": "🧮", "Taxas bancárias": "🏦", "Licenças e alvarás": "📜", "Limpeza": "🧽", "Material de escritório": "🖇️", "Equipamentos": "🖨️", "Entregas e fretes": "🚚", "Comissões": "🏷️", "Formação": "📚", "Segurança": "🔒", "Outros": "🧾"});
 let mode=null,S,month=ld(new Date()).slice(0,7),tab="sales",fl={q:"",t:"all"},ed=null;
 function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display="none",2600)}
-const save=()=>{const localOK=wr("kamba_v2_"+mode,S);if(!localOK){PENDING=true;return}if(sb&&user&&WS[mode]){clearTimeout(save.h);const m=mode,snap=JSON.parse(JSON.stringify(S));save.h=setTimeout(async()=>{if(!navigator.onLine){PENDING=true;netUI();return}SYNCING++;netUI();try{const r=await sb.from("app_state").upsert({workspace_id:WS[m],data:snap,updated_at:new Date().toISOString()});if(r.error){PENDING=true;toast("Guardado neste dispositivo, mas a sincronização falhou. Verifica a ligação e tenta novamente.")}else{PENDING=false}}catch(e){PENDING=true;toast("Guardado neste dispositivo; não foi possível sincronizar agora.")}finally{SYNCING=Math.max(0,SYNCING-1);netUI()}},600)}};
+// Cache identificada por conta, espaço e módulo. Dados antigos sem dono não são importados automaticamente.
+const stateKey=(m=mode)=>user&&user.id&&WS[m]?"kamba_v3_"+user.id+"_"+WS[m]+"_"+m:null;
+const SAVE_JOBS=new Map();
+function resetAccess(){SUBS=[];for(const k of ["personal","business","senior","raiz","couples","intergenerational"]){ENT[k]=false;HAS[k]=false}}
+function resetSession(){
+ SESSION_EPOCH++;ENTER_SEQ++;if(typeof KX_STATE!=="undefined")KX_STATE=null;if(typeof KS_STATE!=="undefined")KS_STATE=null;for(const job of SAVE_JOBS.values())clearTimeout(job.timer);SAVE_JOBS.clear();
+ PENDING=false;mode=null;S=null;WS={};PL={};SERVER_READY=["personal","business"];SERVER_IMPLEMENTED=[];COMMERCE_READY=false;TRANSFER_AVAILABLE=false;resetAccess();
+ for(const id of ["md","tv"]){const el=$("#"+id);if(el){el.hidden=true;el.innerHTML=""}}
+}
+const save=()=>{
+ entCalc();const key=stateKey();if(!key||!ENT[mode]){toast("Subscrição inativa ou sessão indisponível. Alterações não sincronizadas.");return}
+ const localOK=wr(key,S);if(!localOK)PENDING=true;
+ const epoch=SESSION_EPOCH,owner=user.id,ws=WS[mode],m=mode,snap=JSON.parse(JSON.stringify(S));
+ const previous=SAVE_JOBS.get(key);if(previous)clearTimeout(previous.timer);
+ const job={timer:null};SAVE_JOBS.set(key,job);
+ job.timer=setTimeout(async()=>{
+  if(SAVE_JOBS.get(key)!==job)return;SAVE_JOBS.delete(key);
+  if(epoch!==SESSION_EPOCH||!user||user.id!==owner)return;
+  entCalc();if(!ENT[m]){PENDING=true;return toast("Subscrição inativa. Renova antes de sincronizar.")}
+  if(!navigator.onLine){PENDING=true;netUI();return}
+  SYNCING++;netUI();
+  try{const r=await sb.from("app_state").upsert({workspace_id:ws,data:snap,updated_at:new Date().toISOString()});
+   if(epoch!==SESSION_EPOCH)return;
+   if(r.error){PENDING=true;toast("Não foi possível sincronizar. Exporta uma cópia e tenta novamente.")}else if(mode===m&&WS[m]===ws){PENDING=!localOK}
+  }catch(e){if(epoch===SESSION_EPOCH){PENDING=true;toast("Não foi possível sincronizar. Tenta novamente.")}}
+  finally{SYNCING=Math.max(0,SYNCING-1);netUI()}
+ },600);
+};
 const th=rd("kamba_v2_theme");if(th)document.documentElement.dataset.theme=th;
 
-const price=c=>{const p=PL[c];return p&&p.active&&p.price?money(p.price)+(p.period_months===12?" por ano":" / "+p.period_months+" meses"):"Preço por definir"};
+const price=c=>{const p=PL[c];return p&&Number.isSafeInteger(Number(p.price))&&Number(p.price)>0?money(Number(p.price))+(p.period_months===12?" por ano":" / "+p.period_months+" meses"):"Preço indisponível"};
 const PLN=c=>(PL[c]&&PL[c].name)||((PLAN_CATALOG[c]&&PLAN_CATALOG[c].name)||c);
 // Catálogo comercial: os planos adicionais só ficam disponíveis para compra após a migração segura do servidor.
 const PLAN_CATALOG={
- personal:{name:"Kamba Particular + Familiar",price:10000,features:["Receitas e despesas pessoais e familiares","Orçamento, metas e gráficos","Associação de movimentos a familiares"],ready:true},
- couples:{name:"Kamba Casais",price:15000,features:["Base Particular + Familiar","Orçamento individual e partilhado","Objetivos conjuntos e contribuições","Despesas comuns, lembretes a dois e presentes programados"],ready:false},
- senior:{name:"Meu Kamba Mais Velho",price:8900,features:["Organização financeira simples para pessoas mais velhas","Acompanhamento de receitas e despesas","Interface simplificada prevista"],ready:false},
- raiz:{name:"Meu Kamba Raiz",price:7900,features:["Vendas e receitas","Despesas, compras e retiradas","Registo de rendimentos variáveis"],ready:false},
- intergenerational:{name:"Meu Kamba Intergeracional",price:9900,features:["Organização financeira intergeracional","Acompanhamento partilhado entre gerações","Funcionalidades específicas a integrar"],ready:false},
- business:{name:"Kamba Empresarial",price:49900,features:["Vendas, stock e produtos","Despesas, caixa e valores a receber","Documentos internos e exportação"],ready:true},
- combo:{name:"Kamba Particular + Empresarial",price:54900,features:["4 dispositivos pessoais + 3 empresariais","Até 3 dispositivos adicionais (10 no total)","Dados pessoais e empresariais separados"],ready:false}
+ personal:{name:"Kamba Particular + Familiar",features:["Receitas e despesas pessoais e familiares","Orçamento, metas e gráficos","Associação de movimentos a familiares"],ready:true},
+ couples:{name:"Kamba Casais",features:["Registos privados e partilhados para duas pessoas","Orçamentos, objetivos e contribuições","Despesas comuns, lembretes e presentes planeados"],ready:true},
+ senior:{name:"Meu Kamba Mais Velho",features:["Receitas e despesas individuais","Interface com letras e botões maiores","Resumo mensal e exportação de cópia"],ready:true},
+ raiz:{name:"Meu Kamba Raiz",features:["Vendas recebidas e outras receitas","Despesas pagas, compras pagas e retiradas","Registo de rendimentos variáveis e resumo mensal"],ready:true},
+ intergenerational:{name:"Meu Kamba Intergeracional",features:["Acompanhamento por convite e aceitação","Acesso de consulta ou edição dos próprios registos","Registos privados, partilhados e revogação de acesso"],ready:true},
+ business:{name:"Kamba Empresarial",features:["Vendas, stock e produtos","Despesas, caixa e valores a receber","Documentos internos e exportação"],ready:true},
+ combo:{name:"Kamba Particular + Empresarial",features:["Inclui Particular/Família e Empresarial","Dados pessoais e empresariais separados"],ready:true}
 };
-const catalogPrice=c=>{const p=PL[c];if(p&&p.active&&p.price)return money(p.price)+(p.period_months===12?" por ano":" / "+p.period_months+" meses");const x=PLAN_CATALOG[c];return x?money(x.price)+" por ano":"Preço por definir"};
+const planReady=c=>!!(PLAN_CATALOG[c]&&PLAN_CATALOG[c].ready&&COMMERCE_READY&&SERVER_IMPLEMENTED.includes(c));
+const catalogPrice=price;
+const planSaleStatus=c=>!PL[c]?"Catálogo indisponível":!planReady(c)?"Preparação ou atualização pendente":PL[c].active?"Disponível para compra":"Venda desativada";
+
 function gate(){
- mode=null;
+ ENTER_SEQ++;mode=null;if(typeof KX_STATE!=="undefined")KX_STATE=null;if(typeof KS_STATE!=="undefined")KS_STATE=null;
  const has=m=>!!WS[m];
  A.innerHTML=`<div class="gate"><div class="logo">₭</div><h1>Kamba Gestão</h1><p class="mu">Como vais usar a aplicação?</p><p><span class="net st ok" role="status" aria-live="polite"></span></p><p class="mu" style="margin:8px 0 0">Conta: ${esc(user.email)}</p><div class="gate-actions"><button class="secondary" data-a="profile">👤 Perfil</button><button class="secondary" data-a="inst">📲 Instalar aplicação</button><button class="danger" data-a="out">↪ Sair da conta</button></div>
  <div class="modes">
  <button class="mode" data-a="mode" data-m="personal"><span class="ico" aria-hidden="true">🏠</span><strong>Particular / Família</strong><small>Receitas, despesas, orçamento e metas de poupança do dia a dia.</small><span class="pr">${price("personal")}</span>${HAS.personal?"":"<em>🔒 Requer o plano</em>"}${has("personal")?"<em>Tem dados guardados</em>":""}</button>
  <button class="mode" data-a="mode" data-m="business"><span class="ico" aria-hidden="true">🏪</span><strong>Empresarial</strong><small>Vendas, caixa, stock, contas a receber e resultado estimado.</small><span class="pr">${price("business")}</span>${HAS.business?"":"<em>🔒 Requer o plano</em>"}${has("business")?"<em>Tem dados guardados</em>":""}</button>
+ ${["senior","raiz"].map(k=>`<button class="mode" data-a="mode" data-m="${k}"><span class="ico" aria-hidden="true">${k==="senior"?"☀️":"🌱"}</span><strong>${esc(PLN(k))}</strong><small>${k==="senior"?"Dinheiro que entrou e saiu, com navegação simples.":"Vendas recebidas, compras pagas, despesas e retiradas."}</small><span class="pr">${price(k)}</span><em>${!SERVER_IMPLEMENTED.includes(k)?"Requer atualização do servidor":HAS[k]?"Plano válido":"🔒 Requer o plano próprio"}</em></button>`).join("")}
+ ${["couples","intergenerational"].map(k=>`<button class="mode" data-a="mode" data-m="${k}"><span class="ico" aria-hidden="true">${k==="couples"?"🤝":"🌳"}</span><strong>${esc(PLN(k))}</strong><small>${k==="couples"?"Organização individual e a dois, com partilha por escolha.":"Acompanhamento financeiro com convite, consentimento e papéis."}</small><span class="pr">${price(k)}</span><em>${SERVER_IMPLEMENTED.includes(k)?"Abrir espaços e convites":"Requer atualização 016 do servidor"}</em></button>`).join("")}
  </div>
  <div class="gate-plan"><button class="primary full plan-cta" data-a="plano">💳 Ver planos, vantagens e pagamentos</button><button class="secondary full" style="margin-top:9px;min-height:44px" data-a="cloudhelp">☁️ Ajuda, privacidade e segurança</button></div>
- <div class="note" style="text-align:left;margin-top:16px"><strong>Estado dos acessos:</strong> esta versão ainda só abre os módulos Particular/Família e Empresarial. Casais, Mais Velho, Raiz, Intergeracional e Combo permanecem em integração até cada área, permissões e validação no servidor estarem implementadas e testadas. Não compres esses planos nesta versão.</div></div>`;
+ <div class="note" style="text-align:left;margin-top:16px"><strong>Estado dos acessos:</strong> Particular/Família e Empresarial mantêm as suas áreas; o Combo inclui apenas essas duas. Mais Velho e Raiz têm áreas individuais próprias e exigem a atualização 014 do servidor. Casais e Intergeracional usam espaços com convites aceites e registos privados/partilhados; exigem a migração 016. Nenhum plano dá acesso automático aos dados de outra pessoa.</div></div>`;
 }
 async function enter(m){
+ if(["couples","intergenerational"].includes(m))return ksEnter(m);
+ if(["senior","raiz"].includes(m))return kxEnter(m);
+ if(!["personal","business"].includes(m)||!user||!user.id)return toast("Área indisponível.");
+ const epoch=SESSION_EPOCH,request=++ENTER_SEQ;
+ const current=()=>epoch===SESSION_EPOCH&&request===ENTER_SEQ;
+ resetAccess();
+ try{const r=await sb.from("subscriptions").select("*");if(!current())return;if(r.error)throw r.error;SUBS=r.data||[];entCalc()}
+ catch(e){if(current()){resetAccess();toast("Não foi possível validar a subscrição. Tenta novamente.")}return}
  if(!ENT[m]){toast("Este módulo exige uma subscrição ativa e dentro da validade: "+PLN(m)+".");return payOpen()}
  toast("A carregar...");let cloud=null;
- try{if(!WS[m]){const id=uid(),r=await sb.from("workspaces").insert({id,kind:m,name:m==="personal"?"Particular":"Empresa"});if(r.error)throw r.error;WS[m]=id}
+ try{if(!WS[m]){const id=uid(),r=await sb.from("workspaces").insert({id,kind:m,name:m==="personal"?"Particular":"Empresa"});if(r.error)throw r.error;if(!current())return;WS[m]=id}
   const r=await sb.from("app_state").select("data").eq("workspace_id",WS[m]).maybeSingle();if(r.error)throw r.error;cloud=r.data&&r.data.data&&Object.keys(r.data.data).length?r.data.data:null}
  catch(e){return toast("Erro de ligação: "+(e.message||"tenta novamente."))}
- mode=m;S=cloud||rd("kamba_v2_"+m);
- if(!S){S=def(m);const o=m==="personal"&&rd("kamba_gestao_v1");
-  if(o&&Array.isArray(o.transactions)){S.tx=o.transactions.map(t=>({id:t.id,type:t.type,desc:t.description,amt:t.amount,date:t.date,cat:t.category}));S.bud=o.budgets||{};S.goal.target=Number(o.goal)||0}}
+ if(!current())return;
+ mode=m;S=cloud||rd(stateKey(m));
+ if(!S)S=def(m);
  if(m==="business"){S.docs=S.docs||[];S.biz=S.biz||{};S.prod=S.prod||[];S.sales=S.sales||[];S.exp=S.exp||[];S.purchases=Array.isArray(S.purchases)?S.purchases:[];S.suppliers=Array.isArray(S.suppliers)?S.suppliers:[];S.customers=Array.isArray(S.customers)?S.customers:[]}else{S.tx=S.tx||[];S.bud=S.bud||{}}
  S.notes=Array.isArray(S.notes)?S.notes:[];S.profilePhoto=typeof S.profilePhoto==="string"?S.profilePhoto:"";S.members=Array.isArray(S.members)?S.members:[];S.prefs=Object.assign({hide:[],order:[],moveSize:"normal"},S.prefs||{});if(m==="personal")S.goal=Object.assign({target:0,saved:0,monthly:0,deadline:"",hist:[]},S.goal||{});
  tab="sales";fl={q:"",t:"all"};shell();if(!cloud)save();
@@ -455,32 +500,62 @@ const PTv=c=>PL[c]&&PL[c].price?Number(PL[c].price):0;
 const instAmt=(pl,n,k)=>{const t=PTv(pl),b=Math.floor(t/n);return k===n?t-b*(n-1):b};
 function prevInst(){const e=$("#pi");if(!e)return;const pl=$("#pl").value,n=+$("#pn2").value;e.textContent=n===1?"Pagamento único: "+money(instAmt(pl,1,1)):n+" prestações de "+money(instAmt(pl,n,1))+", a última de "+money(instAmt(pl,n,n))+" (total "+money(PTv(pl))+", sem juros)."}
 const ERRBOX='<div style="max-width:720px;margin:0 auto"><div class="al bad">Não foi possível carregar. Já executaste as migrações 004 a 006 no Supabase?</div><button class="primary" data-a="tclose">Fechar</button></div>';
-async function payOpen(){const t=$("#tv");t.hidden=false;t.innerHTML='<div style="max-width:720px;margin:0 auto"><p class="mu">A carregar...</p></div>';
- const[a,,b,ad]=await Promise.all([sb.from("subscriptions").select("*"),loadPlans(),sb.from("payment_requests").select("*").order("created_at",{ascending:false}),sb.rpc("is_admin")]);
- if(a.error||b.error){t.innerHTML=ERRBOX;return}
+async function payOpen(){const epoch=SESSION_EPOCH;const t=$("#tv");t.hidden=false;t.innerHTML='<div style="max-width:720px;margin:0 auto"><p class="mu">A carregar...</p></div>';
+ let results;try{results=await Promise.all([sb.from("subscriptions").select("*"),loadPlans(),sb.from("payment_requests").select("*").order("created_at",{ascending:false}),sb.rpc("is_admin")])}catch(e){if(epoch===SESSION_EPOCH){resetAccess();t.innerHTML=ERRBOX}return}
+ const[a,plansResult,b,ad]=results;
+ if(epoch!==SESSION_EPOCH)return;
+ if(a.error||b.error||plansResult.error){resetAccess();t.innerHTML=ERRBOX;return}
  SUBS=a.data||[];entCalc();const rq=b.data||[],G={};rq.forEach(r=>(G[r.group_id]=G[r.group_id]||[]).push(r));
- const cur=Object.values(G).map(x=>({gid:x[0].group_id,plan:x[0].plan,n:x[0].installments,k:Math.max(...x.map(y=>y.installment_no))+1})).find(g=>g.k<=g.n);
+ let groups=[];if(COMMERCE_READY){const gr=await sb.rpc("kamba_payment_groups");if(epoch!==SESSION_EPOCH)return;if(gr.error){t.innerHTML=ERRBOX;return}groups=Array.isArray(gr.data)?gr.data:[]}
+
  const SL={trial:"Teste",active:"Ativo",pending:"Pendente",expired:"Expirado",cancelled:"Cancelado"};
- const subsH=SUBS.length?SUBS.map(x=>`<div class="tx"><div class="tb"><strong>${esc(PLN(x.plan))}</strong><small>${x.expires_at?"até "+fd(x.expires_at):"sem data de fim"}</small></div><span class="st ${x.status==="active"?"ok":["expired","cancelled"].includes(x.status)?"bad":"w"}">${SL[x.status]||esc(x.status)}</span></div>`).join(""):'<p class="mu">Ainda não tens nenhum plano. Escolhe um abaixo para ativar um módulo.</p>';
- const plansH=Object.entries(PLAN_CATALOG).map(([c,p])=>{const dbPlan=!!(PL[c]&&PL[c].active&&PL[c].price),ready=p.ready&&dbPlan;return `<div class="mode" style="cursor:default;text-align:left;align-items:flex-start"><strong>${esc(p.name)}</strong><span class="pr">${catalogPrice(c)}</span><ul style="margin:0;padding-left:16px;font-size:12px;color:var(--mu);line-height:1.6">${p.features.map(f=>"<li>"+esc(f)+"</li>").join("")}</ul>${ready?'<em>Disponível no sistema atual</em>':'<em>Em integração — ainda não comprar</em>'}</div>`}).join("");
- const availablePlans=Object.values(PL).filter(p=>p.active&&p.price&&PLAN_CATALOG[p.code]&&PLAN_CATALOG[p.code].ready);
- const sel=cur?`<p style="font-size:14px"><strong>Prestação ${cur.k} de ${cur.n}</strong> (${PLN(cur.plan)}): ${money(instAmt(cur.plan,cur.n,cur.k))}</p><input type="hidden" id="pg" value="${esc(cur.gid)}"><input type="hidden" id="pl" value="${cur.plan}"><input type="hidden" id="pn2" value="${cur.n}"><input type="hidden" id="pk" value="${cur.k}">`
- :`<input type="hidden" id="pg" value=""><input type="hidden" id="pk" value="1"><div class="fg"><div class="field"><label for="pl">Plano</label><select id="pl" ${availablePlans.length?"":"disabled"}>${availablePlans.map(p=>`<option value="${p.code}">${esc(p.name)}: ${money(p.price)}</option>`).join("")}</select></div><div class="field"><label for="pn2">Pagar em</label><select id="pn2" ${availablePlans.length?"":"disabled"}>${Array.from({length:12},(_,i)=>`<option value="${i+1}">${i+1}x</option>`).join("")}</select></div><p id="pi" class="mu w" style="font-size:13px;margin:0"></p></div>`;
- const cards=`${!cur&&!availablePlans.length?'<div class="al warn" style="margin-top:12px">Neste momento, não há planos configurados como disponíveis para compra e prontos para venda. Os planos em integração não podem ser cobrados, mesmo que alguém os tenha ativado na configuração do servidor.</div>':`<div class="modes" style="margin:14px 0 4px"><div class="mode" style="cursor:default"><span class="ico" aria-hidden="true">🏦</span><strong>Transferência bancária</strong><small>Pague por transferência bancária usando o IBAN disponibilizado.</small><button class="primary" type="button" data-a="pnew">Ver dados bancários</button></div><div class="mode" style="cursor:default;opacity:.85"><span class="ico" aria-hidden="true">📱</span><strong>PayPay Angola</strong><small>Integração em preparação. Ainda não está disponível.</small><button class="secondary" type="button" disabled>Em preparação</button></div></div>`}`;
- const list=rq.map(r=>{const st=effSt(r),open=st==="pending"||st==="awaiting";return `<div class="tx"><div class="tb"><strong>${PLN(r.plan)} · ${money(r.amount)}${r.installments>1?" · prestação "+r.installment_no+"/"+r.installments:""}</strong><small>${esc(r.reference)} · ${fd(r.created_at.slice(0,10))}</small></div><div class="ta"><span class="st ${stc(st)}">${PST[st]||esc(st)}</span><div>${open?`<button class="secondary small" data-a="pdet" data-id="${esc(r.id)}">Ver dados bancários</button>`:""}${st==="pending"?`<button class="danger small" data-a="pcan" data-id="${esc(r.id)}">Cancelar</button>`:""}</div></div></div>`}).join("")||'<div class="empty">Ainda não fizeste pedidos.</div>';
+ const subsH=SUBS.length?SUBS.map(x=>`<div class="tx"><div class="tb"><strong>${esc(PLN(x.plan))}</strong><small>${x.starts_at?"desde "+fd(x.starts_at)+" · ":""}${x.expires_at?"até "+fd(x.expires_at):"sem data de fim"}</small></div><span class="st ${x.status==="active"?"ok":["expired","cancelled"].includes(x.status)?"bad":"w"}">${SL[x.status]||esc(x.status)}</span></div>`).join(""):'<p class="mu">Ainda não tens nenhum plano. Escolhe um abaixo para ativar um módulo.</p>';
+ const plansH=Object.entries(PLAN_CATALOG).map(([c,p])=>{const dbPlan=!!(PL[c]&&PL[c].active&&PL[c].price),ready=planReady(c)&&dbPlan;return `<div class="mode" style="cursor:default;text-align:left;align-items:flex-start"><strong>${esc(PLN(c))}</strong><span class="pr">${catalogPrice(c)}</span><ul style="margin:0;padding-left:16px;font-size:12px;color:var(--mu);line-height:1.6">${p.features.map(f=>"<li>"+esc(f)+"</li>").join("")}</ul>${`<em>${esc(planSaleStatus(c))}</em>`}</div>`}).join("");
+ const availablePlans=Object.values(PL).filter(p=>p.active&&p.price&&planReady(p.code));
+ const sel=`<input type="hidden" id="pg" value="${uid()}"><input type="hidden" id="pk" value="1"><div class="fg"><div class="field"><label for="pl">Plano</label><select id="pl" ${availablePlans.length?"":"disabled"}>${availablePlans.map(p=>`<option value="${p.code}">${esc(p.name)}: ${money(p.price)} por ano</option>`).join("")}</select></div><div class="field"><label for="pn2">Pagar em</label><select id="pn2" ${availablePlans.length?"":"disabled"}>${Array.from({length:12},(_,i)=>`<option value="${i+1}">${i+1}x</option>`).join("")}</select></div><p id="pi" class="mu w" style="font-size:13px;margin:0"></p></div>`;
+ const cards=!TRANSFER_AVAILABLE?'<div class="al warn">Transferência bancária temporariamente indisponível. O administrador precisa de verificar a configuração de pagamentos.</div>':!availablePlans.length?'<div class="al warn">Não há planos disponíveis para novas compras. As tuas subscrições válidas mantêm o acesso.</div>':'<div class="modes" style="margin:14px 0 4px"><div class="mode" style="cursor:default"><span class="ico" aria-hidden="true">🏦</span><strong>Transferência bancária</strong><small>Cria o pedido para consultar os dados bancários configurados.</small><button class="primary" type="button" data-a="pnew">Ver dados bancários</button></div></div>';
+ const continued=groups.filter(g=>g.last_no<g.installments||g.open_id).map(g=>{const canContinue=!!g.total&&!g.closed&&Number(g.confirmed)===Number(g.last_no)&&g.last_no<g.installments;return `<div class="tx"><div class="tb"><strong>${esc(g.name||PLN(g.plan))}</strong><small>${g.total?"Total contratado: "+money(g.total):"Preço contratado antigo ainda não regularizado"} · ${g.confirmed}/${g.installments} prestações confirmadas</small></div><div>${g.open_id?`<button class="secondary" data-a="pdet" data-id="${esc(g.open_id)}">Ver pedido em aberto</button>`:canContinue?`<button class="primary" data-a="pcontinue" data-id="${esc(g.group_id)}" data-plan="${esc(g.plan)}" data-n="${g.installments}">Criar prestação seguinte</button>`:'<span class="mu">Requer verificação administrativa.</span>'}</div></div>`}).join("");
+
+ const list=rq.map(r=>{const st=effSt(r),open=st==="pending"||st==="awaiting";return `<div class="tx"><div class="tb"><strong>${esc(r.quoted_name||PLN(r.plan))} · ${money(r.amount)}${r.installments>1?" · prestação "+r.installment_no+"/"+r.installments:""}</strong><small>${esc(r.reference)} · ${fd(r.created_at.slice(0,10))}</small></div><div class="ta"><span class="st ${stc(st)}">${PST[st]||esc(st)}</span><div>${open?`<button class="secondary small" data-a="pdet" data-id="${esc(r.id)}">Ver dados bancários</button>`:""}${st==="pending"?`<button class="danger small" data-a="pcan" data-id="${esc(r.id)}">Cancelar</button>`:""}</div></div></div>`}).join("")||'<div class="empty">Ainda não fizeste pedidos.</div>';
  t.innerHTML=`<div style="max-width:720px;margin:0 auto"><div class="topline"><h2>Plano e pagamentos</h2><div style="display:flex;gap:8px;flex-wrap:wrap">${ad.data===true?'<button class="secondary" data-a="padm">Administração de pagamentos</button>':""}<button class="primary" data-a="tclose">Fechar</button></div></div>
  <section class="panel"><h3>Os teus planos</h3>${subsH}</section>
  <section class="panel" style="margin-top:14px"><h3>Planos, preços e o que inclui</h3><div class="modes" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin:8px 0 0">${plansH}</div><div class="note" style="margin-top:12px"><strong>Vantagens e limitações:</strong> os planos marcados «Em integração» são apresentados para deixar visíveis os preços e a oferta planeada, mas ainda não podem ser comprados. O servidor e as regras de acesso têm de ser atualizados antes de ativar esses planos. Particular/Família não inclui vendas ou stock; Empresarial não inclui a área familiar. Os documentos empresariais atuais são internos, não são faturas fiscais válidas em Angola.</div><button class="secondary full" style="min-height:46px;margin-top:10px" data-a="cloudhelp">☁️ Ler política de privacidade e segurança</button></section>
- <section class="panel" style="margin-top:14px"><h3>Pagar a subscrição anual (até 12 prestações)</h3>${sel}${cards}<p class="mu" style="font-size:12px">Os dados bancários só são mostrados depois de criares a cobrança. Nunca envies PINs, palavras-passe nem códigos de autenticação.</p></section>
- <section class="panel" style="margin-top:14px"><h3>Os teus pedidos</h3>${list}</section></div>`;
- if(!cur)prevInst()}
-async function pnew(){const pl=$("#pl")&&$("#pl").value,n=+($("#pn2")&&$("#pn2").value),k=+($("#pk")&&$("#pk").value),existingGroup=$("#pg")&&$("#pg").value,gid=existingGroup||uid();
- if(!pl||!PLAN_CATALOG[pl]||(!PLAN_CATALOG[pl].ready&&!existingGroup)||!PL[pl]||!PL[pl].active||!Number(PL[pl].price))return toast("Este plano ainda não está disponível para compra.");
- if(!(n>=1&&n<=12&&k>=1&&k<=n))return toast("Confirma o número de prestações antes de continuar.");
- const r=await sb.from("payment_requests").insert({plan:pl,amount:instAmt(pl,n,k),method:"transfer",group_id:gid,installments:n,installment_no:k}).select("id").single();
- if(r.error)return toast(/indispon/i.test(r.error.message)?"Transferência bancária ainda não disponível. Tenta mais tarde.":"Não foi possível criar a cobrança: "+r.error.message);
- showPay(r.data.id);payOpen()}
-async function showPay(id){const r=await sb.rpc("get_payment_details",{p_id:id}),d=r.data&&r.data[0];
+ <section class="panel" style="margin-top:14px"><h3>Nova compra ou renovação anual (até 12 prestações)</h3>${sel}${cards}<p class="mu" style="font-size:12px">Os dados bancários só são mostrados depois de criares a cobrança. Nunca envies PINs, palavras-passe nem códigos de autenticação.</p></section>
+ ${continued?`<section class="panel" style="margin-top:14px"><h3>Continuar compras em prestações</h3>${continued}</section>`:""}<section class="panel" style="margin-top:14px"><h3>Os teus pedidos</h3>${list}</section></div>`;
+ prevInst()}
+let PAYMENT_BUSY=null;
+async function purchaseRequest(pl,n,gid){
+ if(PAYMENT_BUSY&&PAYMENT_BUSY.epoch===SESSION_EPOCH)return;
+ if(!COMMERCE_READY)return toast("A atualização comercial do servidor ainda não está disponível.");
+ if(!TRANSFER_AVAILABLE)return toast("Transferência bancária temporariamente indisponível.");
+ if(!PLAN_CATALOG[pl]||!Number.isInteger(n)||n<1||n>12||!gid)return toast("Confirma o plano e as prestações.");
+ const epoch=SESSION_EPOCH,job={epoch};PAYMENT_BUSY=job;
+ try{const r=await sb.rpc("kamba_create_payment",{p_plan:pl,p_installments:n,p_group:gid});if(epoch!==SESSION_EPOCH)return;if(r.error)throw r.error;if(!r.data)throw Error("O servidor não devolveu o pedido.");await showPay(r.data);await payOpen()}
+ catch(e){if(epoch===SESSION_EPOCH)toast(e.message||"Não foi possível criar o pedido.")}
+ finally{if(PAYMENT_BUSY===job)PAYMENT_BUSY=null}
+}
+async function pnew(){const pl=$("#pl")&&$("#pl").value,n=Number($("#pn2")&&$("#pn2").value),gid=$("#pg")&&$("#pg").value;
+ if(!pl||!planReady(pl)||!PL[pl]||!PL[pl].active)return toast("Este plano não está disponível para novas compras.");
+ return purchaseRequest(pl,n,gid);
+}
+async function savePlan(c){
+ const name=$("#pn_"+c).value.trim(),value=Number($("#pp_"+c).value),active=$("#pa_"+c).checked;
+ if(!name||name.length>80||!Number.isSafeInteger(value)||value<1||value>1000000000000)return toast("Indica um nome e um preço inteiro positivo em Kz.");
+ const button=document.querySelector('[data-a="asave"][data-id="'+c+'"]');if(button)button.disabled=true;
+ const epoch=SESSION_EPOCH;
+ try{const result=await sb.rpc("admin_save_plan",{p_code:c,p_name:name,p_price:value,p_months:12,p_active:active});if(epoch!==SESSION_EPOCH)return;if(result.error)throw result.error;const loaded=await loadPlans();if(loaded.error)throw Error("Guardado, mas não foi possível recarregar o catálogo. Reabre o painel.");toast("Plano guardado. O novo preço aplica-se a novas compras e renovações.");await padm()}
+ catch(e){if(epoch===SESSION_EPOCH)toast(e.message||"Não foi possível guardar o plano.")}
+ finally{if(button&&button.isConnected)button.disabled=false}
+}
+async function fixQuote(gid){
+ const input=document.getElementById("quote_"+gid),total=Number(input&&input.value);
+ if(!Number.isSafeInteger(total)||total<1||total>1000000000000)return toast("Indica o total anual originalmente contratado, em Kz inteiros.");
+ if(!confirm("Confirmas o total originalmente contratado? Os montantes históricos não serão alterados."))return;
+ try{const result=await sb.rpc("kamba_admin_fix_quote",{p_group:gid,p_total:total});if(result.error)throw result.error;toast("Preço contratado registado sem alterar os montantes históricos.");await padm()}catch(e){toast(e.message||"Não foi possível regularizar a compra.")}
+}
+
+async function showPay(id){const epoch=SESSION_EPOCH;const r=await sb.rpc("get_payment_details",{p_id:id}),d=r.data&&r.data[0];
+ if(epoch!==SESSION_EPOCH)return;
  if(r.error||!d)return toast("Esta cobrança já não está disponível para pagamento.");
  const row=(l,v,c)=>`<div class="tx"><div class="tb"><small>${l}</small><strong style="font-size:15px;word-break:break-all">${esc(v)}</strong></div><button class="secondary small" type="button" data-a="pcopy" data-id="${esc(c)}">Copiar</button></div>`;
  const m=$("#md");m.hidden=false;
@@ -496,8 +571,11 @@ async function pclaim(){const id=$("#pid").value,f=$("#pf").files[0];let path=nu
   path=(user.id||"u")+"/"+id+"-"+Date.now()+"."+ext;const u=await sb.storage.from("comprovativos").upload(path,f,{contentType:f.type});if(u.error)return toast("Não foi possível enviar o comprovativo: "+u.error.message)}
  const r=await sb.rpc("claim_payment",{p_id:id,p_proof:path});if(r.error)return toast("Não foi possível registar: "+r.error.message);
  $("#md").hidden=true;$("#md").innerHTML="";toast("Registado. A aguardar confirmação do administrador.");payOpen()}
-async function padm(){const t=$("#tv");t.innerHTML='<div style="max-width:720px;margin:0 auto"><p class="mu">A carregar...</p></div>';
- const[s1,l,cf]=await Promise.all([sb.rpc("admin_get_settings"),sb.rpc("admin_list_payments"),sb.rpc("admin_get_config"),loadPlans()]);if(s1.error||l.error||cf.error){t.innerHTML=ERRBOX;return}
+async function padm(){const epoch=SESSION_EPOCH;const t=$("#tv");t.innerHTML='<div style="max-width:720px;margin:0 auto"><p class="mu">A carregar...</p></div>';
+ let results;try{results=await Promise.all([sb.rpc("admin_get_settings"),sb.rpc("admin_list_payments"),sb.rpc("admin_get_config"),loadPlans(),sb.rpc("kamba_admin_unquoted_groups")])}catch(e){if(epoch===SESSION_EPOCH)t.innerHTML=ERRBOX;return}
+ if(epoch!==SESSION_EPOCH)return;const[s1,l,cf,plansResult,unquoted]=results;
+ if(s1.error||l.error||cf.error||plansResult.error||unquoted.error){t.innerHTML=ERRBOX;return}
+
  AD.rows=l.data||[];const c=s1.data||{},ck=(id,v,tx)=>`<label style="display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);margin:0"><input id="${id}" type="checkbox" style="width:auto" ${v?"checked":""}>${tx}</label>`;
  t.innerHTML=`<div style="max-width:720px;margin:0 auto"><div class="topline"><h2>Configurações de pagamento</h2><div style="display:flex;gap:8px"><button class="secondary" data-a="plano">Voltar</button><button class="primary" data-a="tclose">Fechar</button></div></div>
  <section class="panel"><h3>Conta para transferências</h3><form data-f="aset"><div class="fg"><div class="field"><label for="at">Tipo de conta</label><select id="at"><option value="personal">Pessoal</option><option value="business">Empresarial</option></select></div>
@@ -506,15 +584,15 @@ async function padm(){const t=$("#tv");t.innerHTML='<div style="max-width:720px;
  <div class="field">${ck("av",c.verified,"Dados verificados")}</div><div class="field w">${ck("ae",c.transfer_enabled,"Transferência bancária ativa")}</div>
  <div class="field w"><label style="display:flex;gap:8px;align-items:center;font-size:14px;margin:0;opacity:.6"><input type="checkbox" disabled style="width:auto">PayPay Angola: integração em preparação (indisponível)</label></div>
  <div class="field w"><button class="primary full">Guardar</button></div></div></form></section>
- <section class="panel" style="margin-top:14px"><h3>Planos e preços</h3><p class="mu" style="font-size:13px">O painel mostra os sete planos definidos no catálogo. Só é possível guardar um plano quando o respetivo código já existir na tabela <code>plans</code> e a função administrativa do servidor o aceitar. Não atives planos novos antes de concluir a migração e testar as permissões.</p>${Object.keys(PLAN_CATALOG).map(c=>{const p=PL[c]||{},defined=!!PL[c];return `<div class="bi"><strong>${esc(PLAN_CATALOG[c].name)} <small style="color:var(--mu)">(${esc(c)})</small></strong>${!defined?'<p class="mu" style="font-size:12px;margin:5px 0">Ainda não existe na configuração carregada do servidor; edição indisponível até à migração.</p>':""}<div class="fg" style="margin-top:8px"><div class="field w"><label for="pn_${c}">Nome</label><input id="pn_${c}" maxlength="80" value="${esc(p.name||PLAN_CATALOG[c].name)}" ${defined?"":"disabled"}></div><div class="field"><label for="pp_${c}">Preço (Kz)</label><input id="pp_${c}" type="number" min="1" step="1" value="${p.price||PLAN_CATALOG[c].price}" ${defined?"":"disabled"}></div><div class="field"><label for="pm_${c}">Período (meses)</label><select id="pm_${c}" ${defined?"":"disabled"}>${[1,3,6,12].map(x=>`<option value="${x}" ${x===(p.period_months||12)?"selected":""}>${x}</option>`).join("")}</select></div><div class="field"><label style="display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);margin:0"><input id="pa_${c}" type="checkbox" style="width:auto" ${p.active?"checked":""} ${defined?"":"disabled"}>Disponível para venda</label></div><button class="secondary" data-a="asave" data-id="${c}" ${defined?"":"disabled"}>Guardar plano</button></div></div>`}).join("")}</section>
- <section class="panel" style="margin-top:14px"><h3>Atribuir ou alterar plano de um utilizador</h3><form data-f="agrant"><div class="fg"><div class="field w"><label for="ge">E-mail da conta</label><input id="ge" type="email" required></div><div class="field"><label for="gp">Plano</label><select id="gp">${Object.entries(PLAN_CATALOG).map(([code,plan])=>`<option value="${code}">${esc(plan.name)}${PL[code]?"":" (aguarda migração)"}</option>`).join("")}</select></div><div class="field"><label for="gs">Estado</label><select id="gs"><option value="active">Ativo</option><option value="trial">Teste</option><option value="expired">Expirado</option><option value="cancelled">Cancelado</option></select></div><div class="field w"><label for="gx">Válido até</label><input id="gx" type="date"></div><div class="field w"><button class="secondary full">Guardar</button></div></div></form></section>
+ <section class="panel" style="margin-top:14px"><h3>Planos e preços</h3><p class="mu" style="font-size:13px">Altera aqui o nome, o preço anual e a disponibilidade para novas compras. Os identificadores técnicos e a duração de 12 meses mantêm-se. Alterar preços não altera o total das compras já iniciadas nem os pagamentos anteriores.</p>${Object.keys(PLAN_CATALOG).map(c=>{const p=PL[c]||{},defined=!!PL[c];return `<div class="bi"><strong>${esc(PLN(c))} <small style="color:var(--mu)">(${esc(c)})</small></strong>${!defined?'<p class="mu" style="font-size:12px;margin:5px 0">Ainda não existe na configuração carregada do servidor; edição indisponível até à migração.</p>':""}<div class="fg" style="margin-top:8px"><div class="field w"><label for="pn_${c}">Nome</label><input id="pn_${c}" maxlength="80" value="${esc(p.name||PLAN_CATALOG[c].name)}" ${defined?"":"disabled"}></div><div class="field"><label for="pp_${c}">Preço (Kz)</label><input id="pp_${c}" type="number" min="1" step="1" value="${p.price??""}" ${defined?"":"disabled"}></div><div class="field"><label for="pm_${c}">Período (meses)</label><input id="pm_${c}" type="number" readonly value="${p.period_months||12}" aria-label="Duração em meses, apenas consulta"></div><div class="field"><label style="display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);margin:0"><input id="pa_${c}" type="checkbox" style="width:auto" ${p.active?"checked":""} ${defined?"":"disabled"}>Disponível para venda</label></div><button class="secondary" data-a="asave" data-id="${c}" ${defined?"":"disabled"}>Guardar plano</button></div></div>`}).join("")}</section>
+ <section class="panel" style="margin-top:14px"><h3>Atribuir ou alterar plano de um utilizador</h3><form data-f="agrant"><div class="fg"><div class="field w"><label for="ge">E-mail da conta</label><input id="ge" type="email" required></div><div class="field"><label for="gp">Plano</label><select id="gp">${Object.entries(PLAN_CATALOG).map(([code,plan])=>`<option value="${code}">${esc(PLN(code))}${PL[code]?"":" (aguarda migração)"}</option>`).join("")}</select></div><div class="field"><label for="gs">Estado</label><select id="gs"><option value="active">Ativo</option><option value="trial">Teste</option><option value="expired">Expirado</option><option value="cancelled">Cancelado</option></select></div><div class="field w"><label for="gx">Válido até</label><input id="gx" type="date"></div><div class="field w"><button class="secondary full">Guardar</button></div></div></form></section>
  <section class="panel" style="margin-top:14px"><h3>Período de teste e tolerância</h3><form data-f="acfg"><div class="fg"><div class="field"><label for="ct1">Dias de teste para contas novas (0 = sem teste)</label><input id="ct1" type="number" min="0" max="90" value="${cf.data.trial_days}"></div><div class="field"><label for="cg1">Dias de tolerância depois de expirar</label><input id="cg1" type="number" min="0" max="30" value="${cf.data.grace_days}"></div><div class="field w"><button class="secondary full">Guardar</button></div></div></form></section>
- <section class="panel" style="margin-top:14px"><h3>Cobranças</h3><div class="tf" style="grid-template-columns:2fr 1fr"><div class="field"><label for="aq">Pesquisar (referência, cliente, valor)</label><input id="aq" autocomplete="off"></div><div class="field"><label for="afs">Estado</label><select id="afs"><option value="">Todos</option>${Object.entries(PST).map(([k,v])=>`<option value="${k}">${v}</option>`).join("")}</select></div></div><div id="adl"></div></section></div>`;
+ ${(unquoted.data||[]).length?`<section class="panel" style="margin-top:14px"><h3>Compras antigas sem total contratado</h3><p>Confirma o valor acordado na compra original. Não uses automaticamente o preço atual: esta operação apenas acrescenta a cotação histórica validada.</p>${unquoted.data.map(g=>`<div class="bi"><strong>${esc(g.email)} · ${esc(PLN(g.plan))}</strong><p>${g.installments} prestações previstas · ${g.requests} pedidos registados</p><label for="quote_${esc(g.group_id)}">Total originalmente contratado em Kz</label><input id="quote_${esc(g.group_id)}" type="number" min="1" step="1"><button class="secondary" data-a="fixquote" data-id="${esc(g.group_id)}">Confirmar total contratado</button></div>`).join("")}</section>`:""}<section class="panel" style="margin-top:14px"><h3>Cobranças</h3><div class="tf" style="grid-template-columns:2fr 1fr"><div class="field"><label for="aq">Pesquisar (referência, cliente, valor)</label><input id="aq" autocomplete="off"></div><div class="field"><label for="afs">Estado</label><select id="afs"><option value="">Todos</option>${Object.entries(PST).map(([k,v])=>`<option value="${k}">${v}</option>`).join("")}</select></div></div><div id="adl"></div></section></div>`;
  $("#at").value=c.account_type||"personal";alist()}
 function alist(){const q=($("#aq").value||"").toLowerCase(),fs=$("#afs").value;
  const rows=AD.rows.filter(r=>(!fs||effSt(r)===fs)&&(!q||[r.reference,r.email,String(r.amount),PST[effSt(r)]].join(" ").toLowerCase().includes(q)));
  $("#adl").innerHTML=rows.map(r=>{const st=effSt(r),open=st==="pending"||st==="awaiting",B=(s2,tx,k)=>`<button class="${k} small" data-a="ares" data-id="${esc(r.id)}" data-s="${s2}">${tx}</button>`;
-  return `<div class="tx"><div class="tb"><strong>${esc(r.email)} · ${money(r.amount)}</strong><small>${esc(r.reference)} · ${PLN(r.plan)}${r.installments>1?" · "+r.installment_no+"/"+r.installments:""} · ${fd(r.created_at.slice(0,10))}</small></div><div class="ta"><span class="st ${stc(st)}">${PST[st]||esc(st)}</span><div>${r.proof_path?`<button class="secondary small" data-a="aproof" data-id="${esc(r.proof_path)}">Comprovativo</button>`:""}${open?B("confirmed","Confirmar","primary")+B("rejected","Rejeitar","danger"):""}${st==="confirmed"?B("refunded","Reembolsar","danger"):""}</div></div></div>`}).join("")||'<div class="empty">Sem cobranças.</div>'}
+  return `<div class="tx"><div class="tb"><strong>${esc(r.email)} · ${money(r.amount)}</strong><small>${esc(r.reference)} · ${esc(r.quoted_name||PLN(r.plan))}${r.installments>1?" · "+r.installment_no+"/"+r.installments:""} · ${fd(r.created_at.slice(0,10))}</small></div><div class="ta"><span class="st ${stc(st)}">${PST[st]||esc(st)}</span><div>${r.proof_path?`<button class="secondary small" data-a="aproof" data-id="${esc(r.proof_path)}">Comprovativo</button>`:""}${open?B("confirmed","Confirmar","primary")+B("rejected","Rejeitar","danger"):""}${st==="confirmed"?B("refunded","Reembolsar","danger"):""}</div></div></div>`}).join("")||'<div class="empty">Sem cobranças.</div>'}
 const MF={"application/pdf":["PDF","📄"],"image/jpeg":["JPG","🖼️"],"image/png":["PNG","🖼️"],"image/webp":["WEBP","🖼️"],"text/plain":["TXT","📝"],"text/csv":["CSV","📊"],"application/vnd.openxmlformats-officedocument.wordprocessingml.document":["DOCX","📝"],"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":["XLSX","📊"]};
 const EXTM={pdf:"application/pdf",jpg:"image/jpeg",jpeg:"image/jpeg",png:"image/png",webp:"image/webp",txt:"text/plain",csv:"text/csv",docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",xlsx:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"};
 const DCAT=["Faturas","Recibos","Comprovativos","Contratos","Fotografias","Impostos","Saúde","Educação","Outros"],LT={expense:"Despesa",income:"Receita",sale:"Venda",product:"Produto",goal:"Meta",purchase:"Compra",other:"Outro"};
@@ -709,7 +787,7 @@ document.addEventListener("change",e=>{
  else if(t.id==="tsc"){TB.scope=t.value;TB.page=0;tblView()}
  else if(t.id==="tsz"){TB.size=+t.value;TB.page=0;tblView()}
  else if(t.id==="moveSize"){S.prefs=S.prefs||{};S.prefs.moveSize=t.value;save();document.documentElement.dataset.moveSize=t.value;update()}
- else if(t.id==="pl"||t.id==="pn2")prevInst();
+ else if(t.id==="pl"||t.id==="pn2"){if($("#pg"))$("#pg").value=uid();prevInst()}
  else if(t.id==="afs")alist();
  else if(t.id==="dcat"){DOC.cat=t.value;DOC.page=0;docsLoad()}
  else if(t.id==="dty"){DOC.type=t.value;DOC.page=0;docsLoad()}
@@ -743,7 +821,9 @@ document.addEventListener("click",e=>{
  if(a==="pcopy"){return(navigator.clipboard?navigator.clipboard.writeText(id).then(()=>toast("Copiado."),()=>toast("Não foi possível copiar. Seleciona o texto.")):toast("Não foi possível copiar. Seleciona o texto."))}
  if(a==="pcan"){if(!confirm("Cancelar esta cobrança?"))return;sb.rpc("cancel_payment",{p_id:id}).then(r=>{toast(r.error?r.error.message:"Cobrança cancelada.");payOpen()});return}
  if(a==="padm")return padm();
- if(a==="asave"){sb.rpc("admin_save_plan",{p_code:id,p_name:$("#pn_"+id).value,p_price:$("#pp_"+id).value?+$("#pp_"+id).value:null,p_months:+$("#pm_"+id).value,p_active:$("#pa_"+id).checked}).then(r=>{toast(r.error?r.error.message:"Plano guardado.");if(!r.error)padm()});return}
+ if(a==="asave")return savePlan(id);
+ if(a==="fixquote")return fixQuote(id);
+ if(a==="pcontinue")return purchaseRequest(b.dataset.plan,Number(b.dataset.n),id);
  if(a==="aproof"){sb.storage.from("comprovativos").createSignedUrl(id,60).then(u=>u.error?toast("Não foi possível abrir o comprovativo."):window.open(u.data.signedUrl,"_blank","noopener"));return}
  if(a==="ares"){const st2=b.dataset.s,tx={confirmed:"Confirmas que o dinheiro já entrou na conta bancária?",rejected:"Rejeitar este pagamento?",refunded:"Marcar como reembolsado?"}[st2];if(!confirm(tx))return;const note=prompt("Nota (opcional):")||null;sb.rpc("admin_resolve",{p_id:id,p_status:st2,p_note:note}).then(r=>{toast(r.error?r.error.message:"Atualizado.");padm()});return}
  if(a==="retry")return init();
@@ -806,7 +886,11 @@ document.addEventListener("click",e=>{
  if(a==="rst"){S.prefs={hide:[],order:[]};save();update();custom();return toast("Painel reposto.")}
  if(a==="signup")return doAuth("signup");
  if(a==="reset"){const em=$("#em").value.trim();if(!em)return toast("Escreve o teu e-mail primeiro.");sb.auth.resetPasswordForEmail(em,{redirectTo:location.href.split("#")[0]});return toast("Se o e-mail existir, enviámos as instruções.")}
- if(a==="out"){(async()=>{await sb.auth.signOut();try{Object.keys(localStorage).filter(k=>(k.startsWith("kamba_v2_")&&k!=="kamba_v2_theme")||k==="kamba_gestao_v1").forEach(k=>localStorage.removeItem(k))}catch(x){}user=null;WS={};authView()})();return}
+ if(a==="out"){(async()=>{
+ const owner=user&&user.id;resetSession();user=null;authView();
+ try{Object.keys(localStorage).filter(k=>owner&&k.startsWith("kamba_v3_"+owner+"_")).forEach(k=>localStorage.removeItem(k))}catch(x){}
+ try{const r=await sb.auth.signOut();if(r.error)toast("Saíste da aplicação, mas a sessão remota não foi terminada. Tenta novamente.")}catch(e){toast("Não foi possível terminar a sessão remota.")}
+ })();return}
  if(a==="mode")return enter(b.dataset.m);
  if(a==="sw")return gate();
  if(a==="theme"){const r=document.documentElement,cur=r.dataset.theme||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light"),n=cur==="dark"?"light":"dark";r.dataset.theme=n;wr("kamba_v2_theme",n);return}
@@ -846,18 +930,50 @@ async function doAuth(k){
  if(r.error){const m=r.error.message||"";return authView(/Invalid login/i.test(m)?"E-mail ou palavra-passe incorretos.":/not confirmed/i.test(m)?"Confirma primeiro o teu e-mail (vê a caixa de entrada e o spam).":/already/i.test(m)?"Este e-mail já tem conta. Usa Entrar.":m)}
  if(k==="signup"&&!r.data.session)return authView("Conta criada. Enviámos um e-mail de confirmação: abre-o e depois volta aqui para entrar.");
  await start(r.data.session)}
-async function loadPlans(){const r=await sb.from("plans").select("*");PL={};(r.data||[]).forEach(p=>PL[p.code]=p)}
+async function loadPlans(){
+ const epoch=SESSION_EPOCH;
+ try{
+  const r=await sb.from("plans").select("*");if(epoch!==SESSION_EPOCH)return {error:true};
+  PL={};SERVER_READY=[];SERVER_IMPLEMENTED=[];COMMERCE_READY=false;TRANSFER_AVAILABLE=false;
+  if(r.error)return r;
+  (r.data||[]).forEach(p=>PL[p.code]=p);
+  try{const status=await sb.rpc("kamba_commerce_status");if(epoch!==SESSION_EPOCH)return {error:true};
+   if(!status.error&&status.data&&status.data.version===19&&Array.isArray(status.data.implemented)){
+    SERVER_IMPLEMENTED=status.data.implemented.filter(x=>Object.hasOwn(PLAN_CATALOG,x));COMMERCE_READY=true;TRANSFER_AVAILABLE=status.data.transfer_available===true;
+    SERVER_READY=SERVER_IMPLEMENTED.filter(x=>PL[x]&&PL[x].active&&Number(PL[x].price)>0&&PL[x].period_months===12);
+   }
+  }catch(e){if(epoch!==SESSION_EPOCH)return {error:true}}
+  return r;
+ }catch(error){return {error}}
+}
+// DATE: válido até ao fim do dia em Angola. Timestamp: instante exato, obrigatoriamente com fuso.
+function validSubscription(x,now=new Date()){
+ if(!x||!["active","trial"].includes(x.status))return false;
+ if(x.expires_at===null||x.expires_at===undefined)return true;
+ if(typeof x.expires_at!=="string"||!x.expires_at)return false;
+ const value=x.expires_at;
+ if(/^\d{4}-\d{2}-\d{2}$/.test(value)){
+  const d=new Date(value+"T00:00:00Z");if(!Number.isFinite(d.getTime())||d.toISOString().slice(0,10)!==value)return false;
+  const today=new Date(now.getTime()+3600000).toISOString().slice(0,10);return value>=today;
+ }
+ if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value))return false;
+ const day=value.slice(0,10),d=new Date(day+"T00:00:00Z");if(!Number.isFinite(d.getTime())||d.toISOString().slice(0,10)!==day)return false;
+ const n=Date.parse(value);return Number.isFinite(n)&&n>now.getTime();
+}
 function entCalc(){
- const td=ld(new Date());
- const valid=x=>["active","trial"].includes(String(x.status||"").toLowerCase())&&(!x.expires_at||String(x.expires_at).slice(0,10)>=td);
- for(const k of ["personal","business"]){
-  const rows=SUBS.filter(x=>x.plan===k||x.plan==="combo");
-  ENT[k]=rows.some(valid);
-  // HAS now means an entitlement is currently valid, not merely that a subscription row exists.
-  HAS[k]=ENT[k];
+ for(const k of ["personal","business","senior","raiz","couples","intergenerational"]){
+  ENT[k]=SUBS.some(x=>(x.plan===k||(x.plan==="combo"&&["personal","business"].includes(k)))&&validSubscription(x));HAS[k]=ENT[k];
  }
 }
-async function start(session){user=session.user;WS={};const[w,sp]=await Promise.all([sb.from("workspaces").select("id,kind"),sb.from("subscriptions").select("*"),loadPlans()]);if(w.error&&/fetch|network|load failed/i.test(w.error.message||""))return offlineView();(w.data||[]).forEach(x=>{if(!WS[x.kind])WS[x.kind]=x.id});SUBS=sp.data||[];entCalc();gate()}
+async function start(session){
+ resetSession();user=session.user;const epoch=SESSION_EPOCH;
+ try{
+  const[w,sp,plans]=await Promise.all([sb.from("workspaces").select("id,kind"),sb.from("subscriptions").select("*"),loadPlans()]);
+  if(epoch!==SESSION_EPOCH)return;
+  if(w.error||sp.error||plans.error){resetAccess();authView("Não foi possível carregar a conta e validar os acessos. Tenta entrar novamente.");return}
+  (w.data||[]).forEach(x=>{if(["personal","business","senior","raiz"].includes(x.kind)&&!WS[x.kind])WS[x.kind]=x.id});SUBS=sp.data||[];entCalc();gate();
+ }catch(e){if(epoch===SESSION_EPOCH){resetAccess();authView("Não foi possível carregar a conta. Tenta novamente.")}}
+}
 function offlineView(){OFFV=true;mode=null;A.innerHTML=`<div class="gate"><div class="logo">₭</div><h1>Kamba Gestão</h1><p><span class="net st w" role="status" aria-live="polite"></span></p><div class="note" style="text-align:center;margin-top:18px"><strong>Sem ligação à internet.</strong><br>A aplicação abriu, mas para ver os teus dados financeiros é preciso ligares-te à internet. A consulta e o registo offline desses dados só serão ativados quando existir armazenamento local protegido (próxima fase), para não deixar informação financeira desprotegida neste dispositivo.</div><button class="primary" data-a="retry" style="margin-top:16px">Tentar de novo</button> <button class="secondary" data-a="inst" style="margin-top:16px">Como instalar a aplicação</button></div>`}
 const netTxt=()=>!navigator.onLine?["Offline","w"]:SYNCING>0?["A sincronizar...","w"]:["Online","ok"];
 function netUI(){const[t,c]=netTxt();document.querySelectorAll(".net").forEach(e=>{e.textContent="● "+t;e.className="net st "+c})}
@@ -877,7 +993,7 @@ function instOpen(){const ios=/iphone|ipad|ipod/i.test(navigator.userAgent)||(na
  ${DEFERRED&&!std?'<button class="primary full" style="margin-top:14px" data-a="instgo">Instalar agora</button>':""}
  <ol><li><strong>Android (Chrome):</strong> menu ⋮ e «Instalar aplicação» ou «Adicionar ao ecrã principal».</li><li><strong>iPhone e iPad (Safari):</strong> botão Partilhar e «Adicionar ao ecrã principal»${ios?" (é o teu caso)":""}.</li><li><strong>Computador (Chrome ou Edge):</strong> ícone de instalar na barra de endereço, ou menu e «Instalar Kamba Gestão».</li></ol>
  <p style="font-size:13px"><strong>Ficheiros da aplicação guardados para abrir sem internet:</strong> ${ctl?"sim":"ainda não (abre a aplicação uma vez com internet e recarrega)"}</p>
- <div class="note" style="margin:0 0 12px"><strong>Limitações:</strong> só abre sem internet depois de ser aberta uma vez com internet. Os teus dados financeiros ainda <strong>não</strong> ficam disponíveis offline: isso depende de armazenamento local protegido (próxima fase). Pagamentos, recuperação de conta e alterações de segurança exigem sempre internet. O suporte varia com o navegador e o dispositivo (por exemplo, o iPhone pode apagar dados de sites pouco usados).</div>
+ <div class="note" style="margin:0 0 12px"><strong>Limitações:</strong> só abre sem internet depois de ser aberta uma vez com internet. Os teus dados financeiros ainda <strong>não</strong> ficam disponíveis offline: a cache local identifica a conta e o espaço de trabalho, mas não está cifrada. O modo offline completo continua pendente. Pagamentos, recuperação de conta e alterações de segurança exigem sempre internet. O suporte varia com o navegador e o dispositivo (por exemplo, o iPhone pode apagar dados de sites pouco usados).</div>
  <button class="secondary full" data-a="mclose">Fechar</button></div>`}
 function updBanner(w){UPDW=w;if($("#upd"))return;const b=document.createElement("div");b.id="upd";b.setAttribute("role","status");b.innerHTML='Nova versão disponível. <button class="secondary small" data-a="doupd">Atualizar agora</button>';document.body.appendChild(b)}
 async function init(){OFFV=false;
@@ -890,7 +1006,7 @@ window.addEventListener("online",()=>{netUI();if(OFFV)return init();if(mode){if(
 window.addEventListener("offline",()=>{netUI();if(mode)update()});
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();DEFERRED=e});
 window.addEventListener("appinstalled",()=>{DEFERRED=null;toast("Aplicação instalada.")});
-sb&&sb.auth.onAuthStateChange(ev=>{if(ev==="PASSWORD_RECOVERY")setTimeout(async()=>{const p=prompt("Nova palavra-passe (mínimo 8 caracteres):");if(p&&p.length>=8){const r=await sb.auth.updateUser({password:p});toast(r.error?r.error.message:"Palavra-passe atualizada.")}},300)});
+sb&&sb.auth.onAuthStateChange(ev=>{if(ev==="SIGNED_OUT"){resetSession();user=null;authView();return}if(ev==="PASSWORD_RECOVERY")setTimeout(async()=>{const p=prompt("Nova palavra-passe (mínimo 8 caracteres):");if(p&&p.length>=8){const r=await sb.auth.updateUser({password:p});toast(r.error?r.error.message:"Palavra-passe atualizada.")}},300)});
 if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").then(reg=>{reg.addEventListener("updatefound",()=>{const w=reg.installing;if(w)w.addEventListener("statechange",()=>{if(w.state==="installed"&&navigator.serviceWorker.controller)updBanner(w)})})}).catch(()=>{}));navigator.serviceWorker.addEventListener("controllerchange",()=>{if(UPD)location.reload()})}
 init();
 })();

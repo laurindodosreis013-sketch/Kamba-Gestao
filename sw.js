@@ -1,10 +1,10 @@
 /* Service worker do Kamba Gestão.
    Guarda em cache APENAS os ficheiros estáticos da aplicação (e as bibliotecas públicas fixas da CDN).
    NUNCA guarda respostas da API/Supabase nem pedidos autenticados: dados financeiros não vão para a cache do navegador. */
-const VERSION = "kamba-v1";
+const VERSION = "kamba-v6-commerce";
 const STATIC = VERSION + "-static";
 const CDN = VERSION + "-cdn";
-const PRECACHE = ["./", "./index.html", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
+const PRECACHE = ["./shared_areas.js", "./shared_areas.css", "./extra_areas.js", "./extra_areas.css", "./", "./index.html", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
 const CDN_PRECACHE = ["https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"];
 const CDN_HOSTS = ["cdn.jsdelivr.net", "fonts.googleapis.com", "fonts.gstatic.com"];
 
@@ -21,7 +21,7 @@ self.addEventListener("install", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil((async () => {
     const keep = [STATIC, CDN];
-    for (const k of await caches.keys()) if (!keep.includes(k)) await caches.delete(k);
+    for (const k of await caches.keys()) if (k.startsWith("kamba-") && !keep.includes(k)) await caches.delete(k);
     await self.clients.claim();
   })());
 });
