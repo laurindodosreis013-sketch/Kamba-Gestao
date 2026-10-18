@@ -160,10 +160,10 @@ function gate(){
  <button class="mode" data-a="mode" data-m="business"><span class="ico" aria-hidden="true">🏪</span><strong>Empresarial</strong><small>Vendas, caixa, stock, contas a receber e resultado estimado.</small><span class="pr">${price("business")}</span>${HAS.business?"":"<em>🔒 Requer o plano</em>"}${has("business")?"<em>Tem dados guardados</em>":""}</button>
  </div>
  <div class="gate-plan"><button class="primary full plan-cta" data-a="plano">💳 Ver planos, vantagens e pagamentos</button><button class="secondary full" style="margin-top:9px;min-height:44px" data-a="cloudhelp">☁️ Ajuda, privacidade e segurança</button></div>
- <div class="note" style="text-align:left;margin-top:16px"><strong>Antes de começar:</strong> o plano Particular/Família e o Empresarial são módulos separados; o Combo inclui ambos. Consulta os detalhes, limites e preços atualizados em «Ver planos».</div></div>`;
+ <div class="note" style="text-align:left;margin-top:16px"><strong>Estado dos acessos:</strong> esta versão ainda só abre os módulos Particular/Família e Empresarial. Casais, Mais Velho, Raiz, Intergeracional e Combo permanecem em integração até cada área, permissões e validação no servidor estarem implementadas e testadas. Não compres esses planos nesta versão.</div></div>`;
 }
 async function enter(m){
- if(!HAS[m]){toast("Este módulo exige o plano "+PLN(m)+" (ou o Combo).");return payOpen()}
+ if(!ENT[m]){toast("Este módulo exige uma subscrição ativa e dentro da validade: "+PLN(m)+".");return payOpen()}
  toast("A carregar...");let cloud=null;
  try{if(!WS[m]){const id=uid(),r=await sb.from("workspaces").insert({id,kind:m,name:m==="personal"?"Particular":"Empresa"});if(r.error)throw r.error;WS[m]=id}
   const r=await sb.from("app_state").select("data").eq("workspace_id",WS[m]).maybeSingle();if(r.error)throw r.error;cloud=r.data&&r.data.data&&Object.keys(r.data.data).length?r.data.data:null}
@@ -847,7 +847,16 @@ async function doAuth(k){
  if(k==="signup"&&!r.data.session)return authView("Conta criada. Enviámos um e-mail de confirmação: abre-o e depois volta aqui para entrar.");
  await start(r.data.session)}
 async function loadPlans(){const r=await sb.from("plans").select("*");PL={};(r.data||[]).forEach(p=>PL[p.code]=p)}
-function entCalc(){const td=ld(new Date());for(const k of["personal","business"]){const rows=SUBS.filter(x=>x.plan===k||x.plan==="combo");HAS[k]=rows.length>0;ENT[k]=rows.some(x=>["active","trial"].includes(x.status)&&(!x.expires_at||x.expires_at>=td))}}
+function entCalc(){
+ const td=ld(new Date());
+ const valid=x=>["active","trial"].includes(String(x.status||"").toLowerCase())&&(!x.expires_at||String(x.expires_at).slice(0,10)>=td);
+ for(const k of ["personal","business"]){
+  const rows=SUBS.filter(x=>x.plan===k||x.plan==="combo");
+  ENT[k]=rows.some(valid);
+  // HAS now means an entitlement is currently valid, not merely that a subscription row exists.
+  HAS[k]=ENT[k];
+ }
+}
 async function start(session){user=session.user;WS={};const[w,sp]=await Promise.all([sb.from("workspaces").select("id,kind"),sb.from("subscriptions").select("*"),loadPlans()]);if(w.error&&/fetch|network|load failed/i.test(w.error.message||""))return offlineView();(w.data||[]).forEach(x=>{if(!WS[x.kind])WS[x.kind]=x.id});SUBS=sp.data||[];entCalc();gate()}
 function offlineView(){OFFV=true;mode=null;A.innerHTML=`<div class="gate"><div class="logo">₭</div><h1>Kamba Gestão</h1><p><span class="net st w" role="status" aria-live="polite"></span></p><div class="note" style="text-align:center;margin-top:18px"><strong>Sem ligação à internet.</strong><br>A aplicação abriu, mas para ver os teus dados financeiros é preciso ligares-te à internet. A consulta e o registo offline desses dados só serão ativados quando existir armazenamento local protegido (próxima fase), para não deixar informação financeira desprotegida neste dispositivo.</div><button class="primary" data-a="retry" style="margin-top:16px">Tentar de novo</button> <button class="secondary" data-a="inst" style="margin-top:16px">Como instalar a aplicação</button></div>`}
 const netTxt=()=>!navigator.onLine?["Offline","w"]:SYNCING>0?["A sincronizar...","w"]:["Online","ok"];
