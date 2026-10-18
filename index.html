@@ -166,7 +166,7 @@ async function enter(m){
 }
 function shell(){
  A.innerHTML=`<header><div class="brand"><div class="logo">₭</div><div><h1>Kamba Gestão</h1><p>${mode==="personal"?"Particular / Família":"Empresarial"}</p></div></div>
- <div class="hb"><span class="net st ok" role="status" aria-live="polite"></span><button class="secondary small" data-a="theme">Tema</button><button class="secondary small" data-a="profile">Perfil</button><button class="secondary small" data-a="notes">Bloco de notas</button><button class="secondary small" data-a="mydocs">Documentos</button><button class="secondary small" data-a="exp">Exportar</button><button class="secondary small" data-a="sw">Trocar modo</button></div></header>
+ <div class="hb"><span class="net st ok" role="status" aria-live="polite"></span><button class="secondary small" data-a="theme">Tema</button><button class="secondary small" data-a="profile">Perfil</button><button class="secondary small" data-a="notes">Bloco de notas</button><button class="secondary small" data-a="mydocs">Documentos</button><button class="secondary small" data-a="relatorio">Relatórios</button><button class="secondary small" data-a="exp">Exportar</button><button class="secondary small" data-a="sw">Trocar modo</button></div></header>
  <main><button class="fab" data-a="fab">+ Nova transação</button><div id="fabm"></div><div class="topline"><h2>Visão geral</h2><div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap"><button class="secondary" data-a="cust">Personalizar painel</button><div class="field" style="width:190px"><label for="month">Mês em análise</label><input id="month" type="month" value="${month}"></div></div></div><div id="cust"></div>
  <div id="cards" class="cards"></div><div id="alerts"></div><div id="charts" class="charts"></div><div id="insights"></div><div id="body"></div></main>
  <footer>${mode==="personal"?"Os cálculos servem para organização pessoal e não constituem aconselhamento financeiro.":"Documentos e valores são de gestão interna, não são faturas fiscais válidas em Angola. O saldo de caixa conta o recebido pelo mês da venda e não inclui compras de stock. O resultado estimado usa o custo dos produtos vendidos."} Exporta uma cópia dos dados regularmente.</footer><button class="cloud-help" data-a="cloudhelp" aria-label="Ajuda, planos e privacidade">☁️ <span>Ajuda e privacidade</span></button>`;
@@ -406,6 +406,27 @@ function tblOpen(){TB.ds=mode==="personal"?"tx":(tab==="sales"?"sales":tab);TB.q
  $("#tv").innerHTML=`<div style="max-width:1120px;margin:0 auto"><div class="topline"><h2>${esc(d.t)}</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="secondary" data-a="texp" data-id="csv">CSV</button><button class="secondary" data-a="texp" data-id="xlsx">Excel</button><button class="secondary" data-a="texp" data-id="pdf">PDF</button><button class="primary" style="min-height:46px;padding:12px 20px" data-a="tclose">Fechar</button></div></div>
  <div class="tf"><div class="field"><label for="tq">Pesquisar</label><input id="tq" autocomplete="off"></div><div class="field"><label for="tsc">Período</label><select id="tsc" ${d.date?"":"disabled"}><option value="month">Mês em análise</option><option value="all">Tudo</option></select></div><div class="field"><label for="tsz">Linhas por página</label><select id="tsz"><option>10</option><option selected>20</option><option>50</option></select></div><button class="secondary" data-a="tcp">Colunas</button></div><div id="tvb"></div></div>`;
  $("#tsc").value=TB.scope;$("#tv").hidden=false;tblView()}
+function reportModel(){
+ const ym=month, fmt=ym.split("-").reverse().join("/"), sumBy=(rows,key,val)=>{const out={};rows.forEach(r=>{const k=key(r)||"Sem categoria";out[k]=(out[k]||0)+Number(val(r)||0)});return Object.entries(out).sort((a,b)=>b[1]-a[1])};
+ if(mode==="personal"){
+  const rows=(S.tx||[]).filter(t=>(t.date||"").slice(0,7)===ym),inc=rows.filter(t=>t.type==="income"),exp=rows.filter(t=>t.type==="expense"),income=sum(inc,t=>t.amt),expenses=sum(exp,t=>t.amt);
+  return {title:`Relatório pessoal — ${fmt}`,period:ym,metrics:[["Receitas",income],["Despesas",expenses],["Saldo do período",income-expenses]],tables:[{title:"Despesas por categoria",rows:sumBy(exp,t=>t.cat,t=>t.amt)},{title:"Receitas por categoria",rows:sumBy(inc,t=>t.cat,t=>t.amt)},{title:"Despesas por familiar",rows:sumBy(exp,t=>t.memberName||((S.members||[]).find(m=>m.id===t.memberId)||{}).name||"Sem associação",t=>t.amt)}]};
+ }
+ const sales=(S.sales||[]).filter(t=>(t.date||"").slice(0,7)===ym),expenses=(S.exp||[]).filter(t=>(t.date||"").slice(0,7)===ym),purchases=(S.purchases||[]).filter(t=>(t.date||"").slice(0,7)===ym);
+ const turnover=sum(sales,t=>t.total),received=sum(sales,t=>t.paid),cost=sum(sales,t=>t.cost),out=sum(expenses,t=>t.amt),purchaseTotal=sum(purchases,t=>t.total),supplierDue=sum(purchases,t=>Math.max(0,(t.total||0)-(t.paid||0))),customerDue=sum(sales,t=>Math.max(0,t.total-t.paid));
+ return {title:`Relatório empresarial — ${fmt}`,period:ym,metrics:[["Vendas registadas",turnover],["Recebido nas vendas do mês",received],["Por receber (vendas do mês)",customerDue],["Despesas registadas",out],["Compras de stock registadas",purchaseTotal],["Por pagar a fornecedores (compras do mês)",supplierDue],["Resultado estimado",turnover-cost-out]],tables:[{title:"Vendas por descrição",rows:sumBy(sales,t=>t.desc,t=>t.total)},{title:"Despesas por categoria",rows:sumBy(expenses,t=>t.cat,t=>t.amt)},{title:"Compras por fornecedor",rows:sumBy(purchases,t=>t.supplier,t=>t.total)}]};
+}
+function reportOpen(){
+ const r=reportModel(),m=$("#md");m.hidden=false;
+ const moneyRows=arr=>arr.length?arr.map(([k,v])=>`<div class="bh" style="padding:8px 0;border-bottom:1px solid var(--ln)"><span>${esc(k)}</span><strong>${money(v)}</strong></div>`).join(""):'<p class="mu">Sem registos neste período.</p>';
+ m.innerHTML=`<div class="mbox help-box" role="dialog" aria-modal="true" aria-label="Relatórios financeiros"><div class="topline"><div><h2 style="margin:0">${esc(r.title)}</h2><p class="mu" style="margin:5px 0 0">Resumo calculado a partir dos registos existentes. Período selecionado no painel principal.</p></div><button class="secondary" data-a="mclose">Fechar</button></div><div class="cards">${r.metrics.map(([k,v])=>`<div class="card"><div class="lb">${esc(k)}</div><div class="val">${money(v)}</div></div>`).join("")}</div>${r.tables.map(t=>`<section class="panel" style="margin-top:12px"><h3>${esc(t.title)}</h3>${moneyRows(t.rows)}</section>`).join("")}<div class="note"><strong>Como interpretar:</strong> «Resultado estimado» = vendas − custo registado das mercadorias vendidas − despesas operacionais. As compras de stock são mostradas separadamente para não as subtrair novamente. Os valores não substituem contabilidade oficial nem documentos fiscais. Dívidas mostradas nas métricas empresariais referem-se às vendas/compras do período selecionado.</div><button class="primary full" style="margin-top:14px" data-a="relcsv">Exportar este relatório em CSV</button></div>`;
+}
+function reportExport(){
+ const r=reportModel(),lines=[["Relatório Kamba Gestão",r.title],["Período",r.period],["Indicador","Valor (Kz)"],...r.metrics];
+ r.tables.forEach(t=>{lines.push([], [t.title,"Valor (Kz)"],...t.rows)});
+ const csv=lines.map(row=>row.map(v=>{const s=String(v??"");return '"'+s.replace(/"/g,'""')+'"'}).map(x=>x).join(",")).join("\r\n");
+ dl(new Blob(["\ufeff",csv],{type:"text/csv;charset=utf-8"}),`kamba-relatorio-${mode}-${r.period}.csv`);toast("Relatório CSV exportado.");
+}
 function loadXlsx(){return window.XLSX?Promise.resolve():new Promise((res,rej)=>{const e=document.createElement("script");e.src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";e.onload=res;e.onerror=()=>rej(new Error("offline"));document.head.appendChild(e)})}
 const dl=(b,n)=>{const u=URL.createObjectURL(b),l=document.createElement("a");l.href=u;l.download=n;l.click();URL.revokeObjectURL(u)};
 function texp(kind){const{d,vis,rows}=tblData(),H=vis.map(c=>c[1]),R=rows.map(r=>vis.map(c=>c[2](r)));
@@ -735,6 +756,8 @@ document.addEventListener("click",e=>{
  if(a==="mfpurge"){if(!confirm("Eliminar definitivamente? Isto apaga o ficheiro e todas as versões, e não pode ser desfeito."))return;(async()=>{const v=await sb.from("document_versions").select("storage_path").eq("document_id",id),d=DOC.rows.find(x=>x.id===id),paths=[...new Set([...(v.data||[]).map(x=>x.storage_path),d&&d.storage_path].filter(Boolean))];
   if(paths.length){const rm=await sb.storage.from("documentos").remove(paths);if(rm.error)return toast("Não foi possível apagar o ficheiro: "+rm.error.message+". O registo foi mantido.")}
   const r=await sb.from("documents").delete().eq("id",id);toast(r.error?r.error.message:"Eliminado definitivamente.");docsLoad()})();return}
+ if(a==="relatorio")return reportOpen();
+ if(a==="relcsv")return reportExport();
  if(a==="tbl")return tblOpen();
  if(a==="tclose"){$("#tv").hidden=true;$("#tv").innerHTML="";return}
  if(a==="tsort"){TB.sort=TB.sort.k===id?{k:id,d:-TB.sort.d}:{k:id,d:1};TB.page=0;return tblView()}
