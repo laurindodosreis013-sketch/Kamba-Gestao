@@ -48,11 +48,26 @@ footer{max-width:1120px;margin:0 auto;padding:0 18px 25px;color:var(--mu);font-s
 @media(max-width:820px){.layout,.charts{grid-template-columns:1fr}}
 @media(max-width:560px){.modes{grid-template-columns:1fr}.fg{grid-template-columns:1fr}.w{grid-column:auto}main{padding:0 12px 24px}header{padding:14px}.panel{padding:14px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
-:root{--g:#0b7a75;--g2:#e3f3f2;--ink:#0f1e33;--mu:#5a6b80;--ln:#e3e9f1;--bg:#f3f6fb;--bl:#0b2a5b;--bl2:#0e6a86;--dot:#d9e2ee;--sh:0 6px 20px rgba(11,42,91,.07)}
-@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bl:#0a1a33;--bl2:#0b4a5e;--dot:#1c2a3d;--bg:#0b1320;--wh:#131d2e;--ln:#22324a;--sh:none;--ink:#e7eef9;--mu:#93a4bb;--g2:#12363a}}
-:root[data-theme=dark]{--bl:#0a1a33;--bl2:#0b4a5e;--dot:#1c2a3d;--bg:#0b1320;--wh:#131d2e;--ln:#22324a;--sh:none;--ink:#e7eef9;--mu:#93a4bb;--g2:#12363a}
+:root{--g:#0b7a75;--g2:#e3f3f2;--ink:#0f1e33;--mu:#5a6b80;--ln:#e3e9f1;--bg:#f3f6fb;--bl:#0b2a5b;--bl2:#0e6a86;--dot:#d9e2ee;--sh:0 6px 20px rgba(11,42,91,.07);--logo-bg:#ffffff;--logo-fg:#101820}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bl:#0a1a33;--bl2:#0b4a5e;--dot:#1c2a3d;--bg:#0b1320;--wh:#131d2e;--ln:#22324a;--sh:none;--ink:#e7eef9;--mu:#93a4bb;--g2:#12363a;--logo-bg:#17283d;--logo-fg:#ffffff}}
+:root[data-theme=dark]{--bl:#0a1a33;--bl2:#0b4a5e;--dot:#1c2a3d;--bg:#0b1320;--wh:#131d2e;--ln:#22324a;--sh:none;--ink:#e7eef9;--mu:#93a4bb;--g2:#12363a;--logo-bg:#17283d;--logo-fg:#ffffff}
 body{font-family:"Plus Jakarta Sans",Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background-image:radial-gradient(circle at 1px 1px,var(--dot) 1px,transparent 0);background-size:22px 22px;background-attachment:fixed}
-header{background:linear-gradient(120deg,var(--bl),var(--bl2));box-shadow:0 4px 18px rgba(11,42,91,.25)}
+header{background:linear-gradient(120deg,var(--bl),var(--bl2));color:#fff;box-shadow:0 4px 18px rgba(11,42,91,.25)}
+header .brand .logo{background:var(--logo-bg);color:var(--logo-fg);border:1px solid #ffffff26}
+.gate .logo{background:var(--logo-bg);color:var(--logo-fg)}
+#body .tx{align-items:flex-start}
+:root[data-move-size="compact"] #body .tx{padding:7px 0;gap:8px}
+:root[data-move-size="compact"] #body .ti{width:32px;height:32px}
+:root[data-move-size="compact"] #body .tb strong{font-size:12px}
+:root[data-move-size="compact"] #body .ta{font-size:11px}
+:root[data-move-size="large"] #body .tx{padding:16px 0;gap:14px}
+:root[data-move-size="large"] #body .ti{width:48px;height:48px}
+:root[data-move-size="large"] #body .tb strong{font-size:16px}
+:root[data-move-size="large"] #body .ta{font-size:15px}
+:root[data-move-size="large"] #body input,:root[data-move-size="large"] #body select,:root[data-move-size="large"] #body textarea,:root[data-move-size="large"] #body button{font-size:16px;padding-top:14px;padding-bottom:14px}
+#body .tx .ta{max-width:48%;white-space:normal}
+#body .tx .ta div{justify-content:flex-end}
+@media(max-width:560px){header .hb{width:100%;flex-wrap:wrap}header .hb button{flex:1}#body .tx{gap:8px}#body .tx .ta{max-width:44%}#body .tx .ta button{padding:6px 8px}}
 .card,.panel,.mode{border-radius:18px;box-shadow:var(--sh)}.card{border-left:4px solid var(--g)}.panel h3{letter-spacing:-.01em}
 .gate .logo{background:linear-gradient(135deg,var(--bl),var(--bl2));color:#fff}.gate h1{letter-spacing:-.02em}
 button{transition:transform .12s,opacity .12s}button:active:not(:disabled){transform:scale(.97)}
@@ -97,7 +112,7 @@ const CAT=Object.fromEntries(Object.entries(CATG).map(([k,g])=>[k,g.flatMap(x=>x
 const CATS=k=>[...CAT[k],...(((S.prefs||{}).cats||{})[k]||[]).filter(c=>!c.arch).map(c=>c.n)];
 const gopts=k=>{const cu=(((S.prefs||{}).cats||{})[k]||[]).filter(c=>!c.arch).map(c=>c.n);return CATG[k].map(([t,a])=>`<optgroup label="${esc(t)}">${opts(a)}</optgroup>`).join("")+(cu.length?`<optgroup label="Minhas categorias">${opts(cu)}</optgroup>`:"")};
 const BT={tx:"Guardar movimento",bexp:"Guardar despesa",doc:"Guardar rascunho"};
-const def=m=>m==="personal"?{tx:[],bud:{},goal:{target:0,saved:0}}:{prod:[],sales:[],exp:[],docs:[],biz:{}};
+const def=m=>m==="personal"?{tx:[],bud:{},goal:{target:0,saved:0,monthly:0,deadline:"",hist:[]},notes:[],prefs:{hide:[],order:[],moveSize:"normal"}}:{prod:[],sales:[],exp:[],docs:[],biz:{},notes:[],prefs:{hide:[],order:[],moveSize:"normal"}};
 const ICO={"Alimentação":"🛒","Habitação":"🏠","Transporte":"🚗","Saúde":"💊","Educação":"📚","Internet e telefone":"📶","Lazer":"🎮","Família":"👨‍👩‍👧","Dívidas":"💳","Salário":"💼","Negócio":"🏪","Serviços":"🛠️","Rendas":"🔑","Apoio familiar":"🤝","Renda":"🏢","Salários":"👥","Eletricidade":"⚡","Internet":"📶","Manutenção":"🔧","Impostos":"🏛️"};
 Object.assign(ICO,{"Cursos e formação":"📚","Restaurantes e takeaway": "🍽️", "Água": "💧", "Gás": "🔥", "Gerador e combustível": "⛽", "Recargas e dados móveis": "📱", "Casa e reparações": "🛠️", "Mobília e eletrodomésticos": "🛋️", "Empregada doméstica": "🧹", "Combustível": "⛽", "Táxi e candongueiro": "🚕", "Manutenção do carro": "🔧", "Seguros": "🛡️", "Medicamentos": "💊", "Consultas e exames": "🩺", "Propinas": "🎓", "Material escolar": "✏️", "Filhos": "🧒", "Apoio a familiares": "🤝", "Vestuário e calçado": "👕", "Cuidados pessoais": "💇", "Viagens": "✈️", "Assinaturas e TV": "📺", "Presentes e donativos": "🎁", "Animais de estimação": "🐾", "Impostos e taxas": "🏛️", "Poupança e investimentos": "🐷", "Empréstimos e prestações": "💳", "Pensão": "👴", "Bónus e comissões": "🏆", "Venda de bens": "🏷️", "Juros": "📈", "Reembolsos": "↩️", "Presentes recebidos": "🎁", "Telefone e dados": "📞", "Matéria-prima e consumíveis": "🧴", "Embalagens": "📦", "Publicidade e marketing": "📣", "Software e subscrições": "💻", "Contabilidade e serviços": "🧮", "Taxas bancárias": "🏦", "Licenças e alvarás": "📜", "Limpeza": "🧽", "Material de escritório": "🖇️", "Equipamentos": "🖨️", "Entregas e fretes": "🚚", "Comissões": "🏷️", "Formação": "📚", "Segurança": "🔒", "Outros": "🧾"});
 let mode=null,S,month=ld(new Date()).slice(0,7),tab="sales",fl={q:"",t:"all"},ed=null;
@@ -110,7 +125,7 @@ const PLN=c=>(PL[c]&&PL[c].name)||c;
 function gate(){
  mode=null;
  const has=m=>!!WS[m];
- A.innerHTML=`<div class="gate"><div class="logo">₭</div><h1>Kamba Gestão</h1><p class="mu">Como vais usar a aplicação?</p><p><span class="net st ok" role="status" aria-live="polite"></span></p><p class="mu">${esc(user.email)} · <button class="secondary small" data-a="out">Sair</button> <button class="secondary small" data-a="inst">Instalar a aplicação</button> <button class="secondary small" data-a="plano">Plano e pagamentos</button></p>
+ A.innerHTML=`<div class="gate"><div class="logo">₭</div><h1>Kamba Gestão</h1><p class="mu">Como vais usar a aplicação?</p><p><span class="net st ok" role="status" aria-live="polite"></span></p><p class="mu">${esc(user.email)} · <button class="secondary small" data-a="profile">Perfil</button> <button class="secondary small" data-a="out">Sair</button> <button class="secondary small" data-a="inst">Instalar a aplicação</button> <button class="secondary small" data-a="plano">Plano e pagamentos</button></p>
  <div class="modes">
  <button class="mode" data-a="mode" data-m="personal"><span class="ico" aria-hidden="true">🏠</span><strong>Particular / Família</strong><small>Receitas, despesas, orçamento e metas de poupança do dia a dia.</small><span class="pr">${price("personal")}</span>${HAS.personal?"":"<em>🔒 Requer o plano</em>"}${has("personal")?"<em>Tem dados guardados</em>":""}</button>
  <button class="mode" data-a="mode" data-m="business"><span class="ico" aria-hidden="true">🏪</span><strong>Empresarial</strong><small>Vendas, caixa, stock, contas a receber e resultado estimado.</small><span class="pr">${price("business")}</span>${HAS.business?"":"<em>🔒 Requer o plano</em>"}${has("business")?"<em>Tem dados guardados</em>":""}</button>
@@ -126,11 +141,13 @@ async function enter(m){
  mode=m;S=cloud||rd("kamba_v2_"+m);
  if(!S){S=def(m);const o=m==="personal"&&rd("kamba_gestao_v1");
   if(o&&Array.isArray(o.transactions)){S.tx=o.transactions.map(t=>({id:t.id,type:t.type,desc:t.description,amt:t.amount,date:t.date,cat:t.category}));S.bud=o.budgets||{};S.goal.target=Number(o.goal)||0}}
- if(m==="business"){S.docs=S.docs||[];S.biz=S.biz||{}}tab="sales";fl={q:"",t:"all"};shell();if(!cloud)save();
+ if(m==="business"){S.docs=S.docs||[];S.biz=S.biz||{};S.prod=S.prod||[];S.sales=S.sales||[];S.exp=S.exp||[]}else{S.tx=S.tx||[];S.bud=S.bud||{}}
+ S.notes=Array.isArray(S.notes)?S.notes:[];S.prefs=Object.assign({hide:[],order:[],moveSize:"normal"},S.prefs||{});if(m==="personal")S.goal=Object.assign({target:0,saved:0,monthly:0,deadline:"",hist:[]},S.goal||{});
+ tab="sales";fl={q:"",t:"all"};shell();if(!cloud)save();
 }
 function shell(){
  A.innerHTML=`<header><div class="brand"><div class="logo">₭</div><div><h1>Kamba Gestão</h1><p>${mode==="personal"?"Particular / Família":"Empresarial"}</p></div></div>
- <div class="hb"><span class="net st ok" role="status" aria-live="polite"></span><button class="secondary small" data-a="theme">Tema</button><button class="secondary small" data-a="mydocs">Documentos</button><button class="secondary small" data-a="exp">Exportar</button><button class="secondary small" data-a="sw">Trocar modo</button></div></header>
+ <div class="hb"><span class="net st ok" role="status" aria-live="polite"></span><button class="secondary small" data-a="theme">Tema</button><button class="secondary small" data-a="profile">Perfil</button><button class="secondary small" data-a="notes">Bloco de notas</button><button class="secondary small" data-a="mydocs">Documentos</button><button class="secondary small" data-a="exp">Exportar</button><button class="secondary small" data-a="sw">Trocar modo</button></div></header>
  <main><button class="fab" data-a="fab">+ Nova transação</button><div id="fabm"></div><div class="topline"><h2>Visão geral</h2><div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap"><button class="secondary" data-a="cust">Personalizar painel</button><div class="field" style="width:190px"><label for="month">Mês em análise</label><input id="month" type="month" value="${month}"></div></div></div><div id="cust"></div>
  <div id="cards" class="cards"></div><div id="alerts"></div><div id="charts" class="charts"></div><div id="body"></div></main>
  <footer>${mode==="personal"?"Os cálculos servem para organização pessoal e não constituem aconselhamento financeiro.":"Documentos e valores são de gestão interna, não são faturas fiscais válidas em Angola. O saldo de caixa conta o recebido pelo mês da venda e não inclui compras de stock. O resultado estimado usa o custo dos produtos vendidos."} Exporta uma cópia dos dados regularmente.</footer>`;
@@ -478,13 +495,38 @@ function applyPrefs(it){const h=pf().hide;return it.filter(x=>!h.includes(x[0]))
 function ord(g){return KEYS[g].map((k,i)=>[k,i]).sort((a,b)=>ix(a[0])-ix(b[0])||a[1]-b[1]).map(x=>x[0])}
 function mv(k,d){const g=KEYS.cards.includes(k)?"cards":"charts",o=ord(g),i=o.indexOf(k),j=i+d;if(j<0||j>=o.length)return;[o[i],o[j]]=[o[j],o[i]];const ot=ord(g==="cards"?"charts":"cards");pf().order=g==="cards"?[...o,...ot]:[...ot,...o]}
 function custom(){const h=pf().hide,grp=(t,g)=>`<h3 style="margin:16px 0 6px">${t}</h3>`+ord(g).map(k=>`<div class="tx"><label style="display:flex;gap:10px;align-items:center;flex:1;margin:0;font-size:14px;color:var(--ink)"><input type="checkbox" style="width:auto" data-a="vis" data-id="${esc(k)}" ${h.includes(k)?"":"checked"}>${esc(k)}</label><button class="secondary small" data-a="up" data-id="${esc(k)}" aria-label="Subir">↑</button><button class="secondary small" data-a="dn" data-id="${esc(k)}" aria-label="Descer">↓</button></div>`).join("");
- $("#cust").innerHTML=`<section class="panel"><h3>Personalizar painel</h3><p class="mu" style="font-size:13px;margin:0">Escolhe o que mostrar e a ordem. Fica guardado na tua conta.</p>${grp("Cartões","cards")}${grp("Gráficos","charts")}${catsUI()}<div style="margin-top:14px;display:flex;gap:8px"><button class="danger small" data-a="rst">Repor painel</button><button class="secondary small" data-a="cust">Fechar</button></div></section>`}
-function update(){cards();alerts();charts();list();if(mode==="personal"){goalUI();budUI()}}
+ $("#cust").innerHTML=`<section class="panel"><h3>Personalizar painel</h3><p class="mu" style="font-size:13px;margin:0">Escolhe o que mostrar e a ordem. Fica guardado na tua conta.</p>${grp("Cartões","cards")}${grp("Gráficos","charts")}<h3 style="margin:16px 0 6px">Tamanho dos movimentos</h3><div class="field"><label for="moveSize">Tamanho dos registos e controlos</label><select id="moveSize"><option value="compact" ${pf().moveSize==="compact"?"selected":""}>Compacto</option><option value="normal" ${(!pf().moveSize||pf().moveSize==="normal")?"selected":""}>Normal</option><option value="large" ${pf().moveSize==="large"?"selected":""}>Grande</option></select></div>${catsUI()}<div style="margin-top:14px;display:flex;gap:8px"><button class="danger small" data-a="rst">Repor painel</button><button class="secondary small" data-a="cust">Fechar</button></div></section>`}
+function profileOpen(){
+ const m=$("#md"),meta=(user&&user.user_metadata)||{},name=meta.full_name||meta.name||"";
+ m.hidden=false;m.innerHTML=`<div class="mbox" role="dialog" aria-modal="true" aria-label="Editar perfil"><h3 style="margin:0 0 12px">O meu perfil</h3><form data-f="profile"><div class="field"><label for="profileName">Nome de apresentação</label><input id="profileName" maxlength="80" autocomplete="name" value="${esc(name)}" placeholder="Como queres ser identificado?"></div><div class="field" style="margin-top:12px"><label for="profileEmail">E-mail da conta</label><input id="profileEmail" type="email" value="${esc((user&&user.email)||"")}" readonly><small class="mu">O e-mail não é alterado aqui, porque a alteração pode exigir confirmação.</small></div><div class="row2"><button class="primary" style="flex:1">Guardar perfil</button><button type="button" class="secondary" data-a="mclose">Fechar</button></div></form></div>`;
+}
+async function profileSave(){
+ const name=$("#profileName").value.trim();if(!name)return toast("Escreve o nome que queres usar.");
+ const b=$("#md form button.primary");if(b)b.disabled=true;
+ try{const r=await sb.auth.updateUser({data:{full_name:name}});if(r.error)throw r.error;user=r.data.user||user;$("#md").hidden=true;$("#md").innerHTML="";toast("Perfil atualizado.");if(mode)shell();else gate()}
+ catch(e){if(b)b.disabled=false;toast("Não foi possível atualizar o perfil: "+(e.message||"tenta novamente."))}
+}
+function notesOpen(editId=null){
+ S.notes=Array.isArray(S.notes)?S.notes:[];const item=editId?S.notes.find(n=>n.id===editId):null,m=$("#md");
+ const rows=[...S.notes].sort((a,b)=>(b.updatedAt||b.createdAt||"").localeCompare(a.updatedAt||a.createdAt||""));
+ m.hidden=false;m.innerHTML=`<div class="mbox" role="dialog" aria-modal="true" aria-label="Bloco de notas"><h3 style="margin:0 0 12px">Bloco de notas</h3><form data-f="noteSave"><input type="hidden" id="noteId" value="${esc(item?item.id:"")}"><div class="field"><label for="noteTitle">Título</label><input id="noteTitle" maxlength="80" required value="${esc(item?item.title:"")}" placeholder="Ex.: Ideias para o negócio"></div><div class="field" style="margin-top:10px"><label for="noteText">Apontamento</label><textarea id="noteText" rows="5" maxlength="5000" required placeholder="Escreve aqui a tua nota...">${esc(item?item.text:"")}</textarea></div><div class="row2"><button class="primary" style="flex:1">${item?"Guardar alterações":"Guardar apontamento"}</button>${item?'<button type="button" class="secondary" data-a="notes">Cancelar edição</button>':""}</div></form><h3 style="margin-top:22px">Apontamentos guardados (${rows.length})</h3>${rows.map(n=>`<div class="tx"><div class="tb"><strong>${esc(n.title)}</strong><small>${esc((n.text||"").slice(0,180))}${(n.text||"").length>180?"…":""}</small></div><div class="ta"><div><button class="secondary small" data-a="noteedit" data-id="${esc(n.id)}">Editar</button><button class="danger small" data-a="notedel" data-id="${esc(n.id)}">Apagar</button></div></div></div>`).join("")||'<div class="empty">Ainda não tens apontamentos.</div>'}<button class="secondary full" style="margin-top:12px" data-a="mclose">Fechar</button></div>`;
+}
+function noteSave(){
+ if(!ENT[mode])return toast("A subscrição está inativa; renova para guardar alterações.");
+ const title=$("#noteTitle").value.trim(),textVal=$("#noteText").value.trim(),id=$("#noteId").value;if(!title||!textVal)return toast("Preenche o título e o apontamento.");
+ const now=new Date().toISOString();S.notes=Array.isArray(S.notes)?S.notes:[];
+ if(id){const n=S.notes.find(x=>x.id===id);if(!n)return toast("Este apontamento já não existe.");n.title=title;n.text=textVal;n.updatedAt=now}
+ else S.notes.push({id:uid(),title,text:textVal,createdAt:now,updatedAt:now});
+ save();notesOpen();toast("Apontamento guardado.");
+}
+function update(){cards();alerts();charts();list();document.documentElement.dataset.moveSize=(S.prefs&&S.prefs.moveSize)||"normal";if(mode==="personal"){goalUI();budUI()}}
 
 const num=id=>Number($("#"+id).value),val=id=>$("#"+id).value.trim();
 const bad=m=>{toast(m);return true};
 const forms={
  auth(){doAuth("login");return true},
+ profile(){profileSave();return true},
+ noteSave(){noteSave();return true},
  mfedit(){return DOCM.mfedit()},
  agrant(){(async()=>{const r=await sb.rpc("admin_grant_plan",{p_email:$("#ge").value.trim(),p_plan:$("#gp").value,p_status:$("#gs").value,p_expires:$("#gx").value||null});toast(r.error?r.error.message:"Plano atualizado.")})();return true},
  acfg(){(async()=>{const r=await sb.rpc("admin_save_config",{p_trial:+$("#ct1").value||0,p_grace:+$("#cg1").value||0});toast(r.error?r.error.message:"Guardado.")})();return true},
@@ -527,6 +569,7 @@ document.addEventListener("change",e=>{
  else if(t.id==="ft"){fl.t=t.value;list()}
  else if(t.id==="tsc"){TB.scope=t.value;TB.page=0;tblView()}
  else if(t.id==="tsz"){TB.size=+t.value;TB.page=0;tblView()}
+ else if(t.id==="moveSize"){S.prefs=S.prefs||{};S.prefs.moveSize=t.value;save();document.documentElement.dataset.moveSize=t.value;update()}
  else if(t.id==="pl"||t.id==="pn2")prevInst();
  else if(t.id==="afs")alist();
  else if(t.id==="dcat"){DOC.cat=t.value;DOC.page=0;docsLoad()}
@@ -548,6 +591,10 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#md").hidden){$
 document.addEventListener("click",e=>{
  const b=e.target.closest("[data-a]");if(!b)return;const a=b.dataset.a,id=b.dataset.id;
  if(a==="pnew")return pnew();
+ if(a==="profile")return profileOpen();
+ if(a==="notes")return notesOpen();
+ if(a==="noteedit")return notesOpen(id);
+ if(a==="notedel"){if(!confirm("Apagar este apontamento?"))return;S.notes=(S.notes||[]).filter(n=>n.id!==id);save();return notesOpen(),toast("Apontamento apagado.")}
  if(a==="pdet")return showPay(id);
  if(a==="pclaim")return pclaim();
  if(a==="mclose"){$("#md").hidden=true;$("#md").innerHTML="";return}
