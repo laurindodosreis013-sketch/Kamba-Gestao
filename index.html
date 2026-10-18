@@ -147,7 +147,7 @@ function body(){
   <div class="field"><label for="ct">Categoria</label><select id="ct">${gopts("expense")}</select></div>
   <div class="field w"><button class="primary full">Guardar movimento</button></div></div></form>
   <h3 class="gap">Meta de poupança</h3><div id="goal"></div>
-  <form data-f="goal" class="row2"><div class="field"><label for="gt">Meta total (Kz)</label><input id="gt" type="number" min="0" step="1"></div><button class="secondary">Definir</button></form>
+  <form data-f="goal"><div class="fg"><div class="field"><label for="gt">Meta total (Kz)</label><input id="gt" type="number" min="0" step="1" value="${S.goal.target||""}"></div><div class="field"><label for="gm">Poupança mensal prevista (Kz)</label><input id="gm" type="number" min="0" step="1" value="${S.goal.monthly||""}"></div><div class="field w"><label for="gd">Data desejada (opcional)</label><input id="gd" type="month" value="${esc(S.goal.deadline||"")}"></div><div class="field w"><button class="secondary full">Guardar meta</button></div></div></form>
   <form data-f="contrib" class="row2"><div class="field"><label for="gc">Valor poupado agora (Kz)</label><input id="gc" type="number" min="1" step="1" required></div><button class="secondary">Adicionar</button></form>
   <h3 class="gap">Orçamento por categoria</h3>
   <form data-f="bud"><div class="fg"><div class="field"><label for="bc">Categoria</label><select id="bc">${gopts("expense")}</select></div><div class="field"><label for="bl">Limite mensal (Kz)</label><input id="bl" type="number" min="1" step="1" required></div><div class="field w"><button class="secondary full">Definir orçamento</button></div></div></form><div id="bud"></div></section>
@@ -223,10 +223,24 @@ function list(){
  }
  $("#list").innerHTML=h||E;
 }
-function goalUI(){
- const g=S.goal,p=g.target?Math.min(100,g.saved/g.target*100):0;
- $("#goal").innerHTML=`<div class="bh"><strong>${money(g.saved)} poupados</strong><span class="mu">Meta: ${money(g.target)}</span></div><div class="bw"><div class="bar" style="width:${p}%"></div></div>${g.target>g.saved?`<div class="ht mu" style="margin-top:6px">Faltam ${money(g.target-g.saved)}</div>`:""}`;
-}
+function goalForecast(g,now){const t=g.target||0,sv=g.saved||0,mo=g.monthly||0,falta=Math.max(0,t-sv),pct=t>0?Math.min(100,sv/t*100):0;
+ if(t<=0)return{state:"none",pct:0,falta:0};
+ if(falta===0)return{state:"done",pct:100,falta:0};
+ if(!(mo>0))return{state:"nomonthly",pct,falta};
+ const n=Math.ceil(falta/mo),r={state:"ok",pct,falta,n,date:new Date(now.getFullYear(),now.getMonth()+n,1),years:Math.floor(n/12),rest:n%12};
+ if(/^\d{4}-\d{2}$/.test(g.deadline||"")){const dm=(+g.deadline.slice(0,4)-now.getFullYear())*12+(+g.deadline.slice(5)-1-now.getMonth());
+  if(dm<1)r.late="passed";else if(n>dm){r.late="late";r.extra=n-dm;r.need=Math.ceil(falta/dm)}else{r.late="ontime";r.early=dm-n}}
+ return r}
+function goalUI(){const g=S.goal,f=goalForecast(g,new Date()),h=g.hist||[],pl=(n,a,b)=>n+" "+(n===1?a:b);let msg;
+ if(f.state==="none")msg="Define o valor total da tua meta para ver o progresso.";
+ else if(f.state==="done")msg="🎉 Meta concluída!";
+ else if(f.state==="nomonthly")msg="Para ver a previsão, indica uma poupança mensal maior que zero.";
+ else{const t=f.years?pl(f.years,"ano","anos")+(f.rest?" e "+pl(f.rest,"mês","meses"):""):"";
+  msg=`Previsão: cerca de <strong>${pl(f.n,"mês","meses")}</strong>${t?" ("+t+")":""}, por volta de <strong>${String(f.date.getMonth()+1).padStart(2,"0")}/${f.date.getFullYear()}</strong>, poupando ${money(g.monthly)} por mês. <span class="mu">Cálculo simples: não inclui juros nem rendimentos.</span>`;
+  if(f.late==="passed")msg+="<br>A data desejada já passou.";
+  else if(f.late==="late")msg+=`<br><span class="exp">Chegas ${pl(f.extra,"mês","meses")} depois da data desejada. Para chegar a tempo precisas de poupar ${money(f.need)} por mês.</span>`;
+  else if(f.late==="ontime")msg+=`<br><span class="inc">No ritmo atual chegas a tempo${f.early?", "+pl(f.early,"mês","meses")+" antes":""}.</span>`}
+ $("#goal").innerHTML=`<div class="bh"><strong>${money(g.saved)} poupados</strong><span class="mu">Meta: ${money(g.target)}</span></div><div class="bw"><div class="bar" style="width:${f.pct||0}%"></div></div><div class="bh ht"><span>${Math.round(f.pct||0)}% concluído</span><span>Faltam ${money(f.falta||0)}</span></div><p style="font-size:13px;margin:8px 0">${msg}</p>${h.length?`<details><summary style="font-size:13px;cursor:pointer">Histórico de contribuições (${h.length})</summary>${h.slice(-8).reverse().map(x=>`<div class="bh ht" style="padding:3px 0"><span>${fd(x.d)}</span><span>${money(x.a)}</span></div>`).join("")}</details>`:""}`}
 function budUI(){
  const m=mtx(),e=Object.entries(S.bud);
  $("#bud").innerHTML=e.length?e.map(([k,l])=>{const sp=sum(m.filter(t=>t.type==="expense"&&t.cat===k),t=>t.amt),p=Math.round(sp/l*100);
@@ -487,8 +501,8 @@ const forms={
  cat(){const t=$("#cty").value,n=val("cnm");if(!n)return bad("Escreve o nome da categoria.");const p=pf();p.cats=p.cats||{};if([...CAT[t],...(p.cats[t]||[]).map(c=>c.n)].some(x=>x.toLowerCase()===n.toLowerCase()))return bad("Essa categoria já existe.");(p.cats[t]=p.cats[t]||[]).push({n,arch:false});setTimeout(()=>{custom();refreshCats()},0)},
  tx(){const d=val("ds"),a=Math.round(num("am")),dt=$("#dt").value;if(!d||!(a>0)||!dt)return bad("Confirma a descrição, o valor e a data.");
   const o={type:$("#ty").value,desc:d,amt:a,date:dt,cat:$("#ct").value};if(ed&&ed.k==="tx"){const t=S.tx.find(x=>x.id===ed.id);if(t)Object.assign(t,o,{upd:new Date().toISOString()});ed=null}else S.tx.push({id:uid(),...o});setMonth(dt)},
- goal(){S.goal.target=Math.max(0,Math.round(num("gt")||0))},
- contrib(){const a=Math.round(num("gc"));if(!(a>0))return bad("Introduz um valor maior que zero.");S.goal.saved+=a},
+ goal(){const t=Math.max(0,Math.round(num("gt")||0)),m=Math.max(0,Math.round(num("gm")||0)),d=$("#gd").value;S.goal.target=t;S.goal.monthly=m;S.goal.deadline=/^\d{4}-\d{2}$/.test(d)?d:"";setTimeout(()=>{body();update()},0)},
+ contrib(){const a=Math.round(num("gc"));if(!(a>0))return bad("Introduz um valor maior que zero.");S.goal.saved+=a;(S.goal.hist=S.goal.hist||[]).push({d:ld(new Date()),a});if(S.goal.hist.length>200)S.goal.hist.shift()},
  bud(){const a=Math.round(num("bl"));if(!(a>0))return bad("Introduz um limite maior que zero.");S.bud[$("#bc").value]=a},
  sale(){const d=val("ds"),q=Math.round(num("q")),pr=Math.round(num("pr")),dt=$("#dt").value,pid=$("#sp").value;
   if(!d||!(q>0)||!(pr>0)||!dt)return bad("Confirma a descrição, quantidade, preço e data.");
