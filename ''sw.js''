@@ -1,0 +1,63 @@
+/* Service worker do Kamba Gestão.
+   Guarda em cache APENAS os ficheiros estáticos da aplicação (e as bibliotecas públicas fixas da CDN).
+   NUNCA guarda respostas da API/Supabase nem pedidos autenticados: dados financeiros não vão para a cache do navegador. */
+const VERSION = "kamba-v7-business";
+const STATIC = VERSION + "-static";
+const CDN = VERSION + "-cdn";
+const PRECACHE = ["./shared_areas.js", "./shared_areas.css", "./extra_areas.js", "./extra_areas.css", "./", "./index.html", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
+const CDN_PRECACHE = ["https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"];
+const CDN_HOSTS = ["cdn.jsdelivr.net", "fonts.googleapis.com", "fonts.gstatic.com"];
+
+self.addEventListener("install", (e) => {
+  e.waitUntil((async () => {
+    const s = await caches.open(STATIC);
+    await s.addAll(PRECACHE);
+    const c = await caches.open(CDN);
+    // se a CDN falhar agora, a biblioteca é guardada na primeira utilização com internet
+    await Promise.all(CDN_PRECACHE.map((u) => c.add(new Request(u, { mode: "cors", credentials: "omit" })).catch(() => {})));
+  })());
+});
+
+self.addEventListener("activate", (e) => {
+  e.waitUntil((async () => {
+    const keep = [STATIC, CDN];
+    for (const k of await caches.keys()) if (k.startsWith("kamba-") && !keep.includes(k)) await caches.delete(k);
+    await self.clients.claim();
+  })());
+});
+
+self.addEventListener("message", (e) => { if (e.data === "SKIP_WAITING") self.skipWaiting(); });
+
+self.addEventListener("fetch", (e) => {
+  const r = e.request;
+  if (r.method !== "GET") return;
+  if (r.headers.has("authorization")) return;           // pedidos autenticados: nunca em cache
+  const u = new URL(r.url);
+  if (u.origin === self.location.origin) {
+    e.respondWith(r.mode === "navigate" ? navigate(r) : staleWhileRevalidate(STATIC, r));
+  } else if (CDN_HOSTS.includes(u.hostname)) {
+    e.respondWith(staleWhileRevalidate(CDN, r));
+  }
+  // todo o resto (Supabase, APIs, outros sites) não é tratado aqui: vai sempre à rede e nunca para a cache
+});
+
+async function navigate(r) {
+  try {
+    const res = await fetch(r);
+    if (res.ok) { const c = await caches.open(STATIC); await c.put("./index.html", res.clone()); }
+    return res;
+  } catch (_) {
+    const c = await caches.open(STATIC);
+    return (await c.match("./index.html")) || (await c.match("./")) || new Response("Sem ligação e a aplicação ainda não foi guardada neste dispositivo.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  }
+}
+
+async function staleWhileRevalidate(name, r) {
+  const c = await caches.open(name);
+  const hit = await c.match(r);
+  const net = fetch(r).then((res) => {
+    if (res.ok && (res.type === "basic" || res.type === "cors")) c.put(r, res.clone());
+    return res;
+  }).catch(() => null);
+  return hit || (await net) || new Response("", { status: 504 });
+}
