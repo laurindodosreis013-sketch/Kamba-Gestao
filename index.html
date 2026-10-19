@@ -111,6 +111,8 @@ textarea{width:100%;border:1px solid var(--ln);border-radius:10px;padding:11px 1
 <style>
 .ks-area main{max-width:1100px;margin:auto;padding:24px 16px}.ks-area form button,.ks-area .hb button{min-height:44px}.ks-area .ks-record{margin:12px 0}.ks-area .ks-record h3{overflow-wrap:anywhere}.ks-area .ks-toolbar{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}.ks-area .panel strong{font-size:1.25em}.ks-area .fg{margin-bottom:12px}.ks-area input,.ks-area select{max-width:100%}.ks-area button:focus-visible,.ks-area input:focus-visible,.ks-area select:focus-visible{outline:3px solid #d97706;outline-offset:3px}@media(max-width:640px){.ks-area header{align-items:flex-start;flex-direction:column}.ks-area .hb{display:flex;flex-wrap:wrap}.ks-area .cards{grid-template-columns:1fr}.ks-area .fg{grid-template-columns:1fr}}
 
+.ks-area [hidden]{display:none!important}
+
 </style>
 </head>
 <body>
@@ -118,7 +120,10 @@ textarea{width:100%;border:1px solid var(--ln);border-radius:10px;padding:11px 1
 <div class="toast" id="toast" role="status"></div>
 <div id="pv" hidden></div><div id="tv" hidden></div><div id="md" hidden></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
+
+
 <script>
+(()=>{
 /* Áreas individuais Mais Velho e Raiz. Persistência por workspace em app_state.
    Não concede acesso a acompanhantes nem altera dados dos módulos existentes. */
 let KX_STATE=null;
@@ -141,6 +146,12 @@ function kxTotals(kind,entries,month){
  const total=types=>rows.filter(x=>types.includes(x.type)).reduce((n,x)=>n+x.amount,0);
  return {incoming:total(cfg.incoming),outgoing:total(cfg.outgoing),withdrawals:total(['withdrawal']),balance:total(cfg.incoming)-total(cfg.outgoing)};
 }
+function kxReport(kind,entries,month){
+ const cfg=KX_CONFIG[kind],rows=entries.filter(x=>x.date.slice(0,7)===month);
+ return Object.entries(cfg.types).map(([type,label])=>({type,label,count:rows.filter(x=>x.type===type).length,total:rows.filter(x=>x.type===type).reduce((n,x)=>n+x.amount,0)}));
+}
+function kxCsvCell(value){const str=String(value);return '"'+(/^[=+@\-\t\r]/.test(str)?"'":'')+str.replace(/"/g,'""')+'"'}
+function kxCsv(kind,entries,month){const cfg=KX_CONFIG[kind];return '\ufeff'+[['Data','Tipo','Descrição','Entrada (Kz)','Saída (Kz)'],...entries.filter(x=>x.date.slice(0,7)===month).map(x=>[x.date,cfg.types[x.type],x.desc,cfg.incoming.includes(x.type)?x.amount:'',cfg.outgoing.includes(x.type)?x.amount:''])].map(row=>row.map(kxCsvCell).join(';')).join('\r\n')}
 async function kxEnter(kind){
  if(!Object.hasOwn(KX_CONFIG,kind)||!user||!user.id)return toast('Área indisponível.');
  const epoch=SESSION_EPOCH,seq=++ENTER_SEQ;const current=()=>epoch===SESSION_EPOCH&&seq===ENTER_SEQ;
@@ -158,7 +169,7 @@ async function kxEnter(kind){
   if(!kxDocument(kind,data))throw Error('Os dados desta área têm um formato diferente. Nada foi substituído.');
   const role=member.data&&member.data.role;
   if(!['admin','member','viewer'].includes(role))throw Error('Não foi possível confirmar o teu papel neste espaço.');
-  mode=null;KX_STATE={kind,ws,epoch,owner:user.id,data,role,busy:false,month:kxToday().slice(0,7),edit:null};kxRender();
+  mode=null;KX_STATE={kind,ws,epoch,owner:user.id,data,role,busy:false,month:kxToday().slice(0,7),typeFilter:'all',edit:null};kxRender();
  }catch(e){if(current())toast(e.message||'Não foi possível abrir esta área.')}
 }
 async function kxPersist(ctx,data){
@@ -183,13 +194,13 @@ function kxBusy(){document.querySelectorAll('[data-kx-write]').forEach(el=>el.di
 function kxRender(){
  const ctx=KX_STATE;if(!ctx)return;const cfg=KX_CONFIG[ctx.kind],write=['admin','member'].includes(ctx.role),totals=kxTotals(ctx.kind,ctx.data.entries,ctx.month);
  const selected=ctx.edit&&ctx.data.entries.find(x=>x.id===ctx.edit);
- const rows=ctx.data.entries.filter(x=>x.date.slice(0,7)===ctx.month).slice().sort((a,b)=>b.date.localeCompare(a.date));
- A.innerHTML=`<div class="kx-area ${ctx.kind==='senior'?'kx-senior':''}"><header><div class="brand"><div class="logo">₭</div><div><h1>${esc(cfg.title)}</h1><p>Registos individuais</p></div></div><div class="hb"><button class="secondary" data-kx="back">Trocar área</button><button class="secondary" data-a="plano">Plano e pagamentos</button><button class="secondary" data-kx="export">Exportar cópia</button><button class="danger" data-a="out">Sair</button></div></header><main>
+ const rows=ctx.data.entries.filter(x=>x.date.slice(0,7)===ctx.month&&(!ctx.typeFilter||ctx.typeFilter==='all'||x.type===ctx.typeFilter)).slice().sort((a,b)=>b.date.localeCompare(a.date));
+ A.innerHTML=`<div class="kx-area ${ctx.kind==='senior'?'kx-senior':''}"><header><div class="brand"><div class="logo">₭</div><div><h1>${esc(cfg.title)}</h1><p>Registos individuais</p></div></div><div class="hb"><button class="secondary" data-kx="back">Trocar área</button><button class="secondary" data-a="plano">Plano e pagamentos</button><button class="secondary" data-kx="export">Exportar cópia</button><button class="secondary" data-kx="csv">Exportar mês em CSV</button><button class="danger" data-a="out">Sair</button></div></header><main>
  <div class="topline"><h2>O meu dinheiro</h2><div class="field"><label for="kx-month">Consultar mês</label><input id="kx-month" type="month" value="${esc(ctx.month)}"></div></div>
  <div class="cards"><section class="panel"><h3>Entradas no mês</h3><strong>${money(totals.incoming)}</strong></section><section class="panel"><h3>Saídas no mês</h3><strong>${money(totals.outgoing)}</strong></section><section class="panel"><h3>Saldo dos registos do mês</h3><strong>${money(totals.balance)}</strong></section></div>
  ${ctx.kind==='raiz'?`<p class="note">Regista apenas valores já recebidos ou pagos. As retiradas pessoais deste mês somam ${money(totals.withdrawals)} e já estão incluídas nas saídas. O saldo não é o lucro nem o saldo bancário.</p>`:'<p class="note">Consulta o dinheiro que entrou e saiu. O saldo corresponde apenas aos registos deste mês.</p>'}
  ${write?`<section class="panel"><h2>${selected?'Alterar registo':'Registar dinheiro'}</h2><form id="kx-form"><div class="fg"><div class="field w"><label for="kx-type">O que aconteceu?</label><select id="kx-type">${Object.entries(cfg.types).map(([v,n])=>`<option value="${v}" ${selected&&selected.type===v?'selected':''}>${esc(n)}</option>`).join('')}</select></div><div class="field w"><label for="kx-desc">Descrição</label><input id="kx-desc" maxlength="80" required value="${esc(selected?selected.desc:'')}" placeholder="${ctx.kind==='senior'?'Ex.: Pensão, alimentação':'Ex.: Venda do dia, compra de mercadoria'}"></div><div class="field"><label for="kx-amount">Valor em Kz</label><input id="kx-amount" type="number" inputmode="numeric" min="1" max="1000000000000" step="1" required value="${selected?selected.amount:''}"></div><div class="field"><label for="kx-date">Data</label><input id="kx-date" type="date" required value="${selected?selected.date:kxToday()}"></div></div><div class="row2"><button class="primary" data-kx-write>${selected?'Guardar alteração':'Guardar registo'}</button>${selected?'<button type="button" class="secondary" data-kx="cancel">Cancelar alteração</button>':''}</div><p class="mu" role="status" id="kx-status" aria-live="polite"></p></form></section>`:'<p class="note">Tens acesso de consulta. Só os membros autorizados podem registar alterações.</p>'}
- <section class="panel" style="margin-top:20px"><h2>Registos do mês (${rows.length})</h2>${rows.length?rows.map(x=>`<div class="tx"><div class="tb"><strong>${esc(x.desc)}</strong><small>${esc(cfg.types[x.type])} · ${esc(fd(x.date))}</small></div><div class="ta"><strong>${cfg.incoming.includes(x.type)?'+':'−'} ${money(x.amount)}</strong>${write?`<div><button class="secondary small" data-kx="edit" data-id="${esc(x.id)}" data-kx-write>Alterar</button><button class="danger small" data-kx="delete" data-id="${esc(x.id)}" data-kx-write>Eliminar</button></div>`:''}</div></div>`).join(''):'<p class="empty">Ainda não há registos neste mês.</p>'}</section></main><footer>Os registos são de organização financeira. Exporta cópias regularmente.</footer></div>`;
+ <section class="panel" style="margin-top:20px"><h2>Resumo por tipo — ${esc(ctx.month)}</h2>${kxReport(ctx.kind,ctx.data.entries,ctx.month).map(x=>`<p><strong>${esc(x.label)}:</strong> ${money(x.total)} · ${x.count} registo(s)</p>`).join('')}</section><section class="panel" style="margin-top:20px"><h2>Registos do mês (${rows.length})</h2><div class="field"><label for="kx-filter">Mostrar registos</label><select id="kx-filter"><option value="all">Todos</option>${Object.entries(cfg.types).map(([type,label])=>`<option value="${type}" ${ctx.typeFilter===type?'selected':''}>${esc(label)}</option>`).join('')}</select></div>${rows.length?rows.map(x=>`<div class="tx"><div class="tb"><strong>${esc(x.desc)}</strong><small>${esc(cfg.types[x.type])} · ${esc(fd(x.date))}</small></div><div class="ta"><strong>${cfg.incoming.includes(x.type)?'+':'−'} ${money(x.amount)}</strong>${write?`<div><button class="secondary small" data-kx="edit" data-id="${esc(x.id)}" data-kx-write>Alterar</button><button class="danger small" data-kx="delete" data-id="${esc(x.id)}" data-kx-write>Eliminar</button></div>`:''}</div></div>`).join(''):'<p class="empty">Ainda não há registos neste mês.</p>'}</section></main><footer>Os registos são de organização financeira. Exporta cópias regularmente.</footer></div>`;
  kxBusy();
 }
 async function kxSubmit(form){
@@ -207,11 +218,12 @@ function kxExport(){
  const link=document.createElement('a');link.href=url;link.download=`kamba-${ctx.kind}-${kxToday()}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 document.addEventListener('submit',e=>{if(e.target.id!=='kx-form')return;e.preventDefault();kxSubmit(e.target)});
-document.addEventListener('change',e=>{if(e.target.id==='kx-month'&&KX_STATE&&/^\d{4}-\d{2}$/.test(e.target.value)){KX_STATE.month=e.target.value;KX_STATE.edit=null;kxRender()}});
+document.addEventListener('change',e=>{if(e.target.id==='kx-filter'&&KX_STATE&&!KX_STATE.busy){KX_STATE.typeFilter=e.target.value;kxRender();return}if(e.target.id==='kx-month'&&KX_STATE&&/^\d{4}-\d{2}$/.test(e.target.value)){KX_STATE.month=e.target.value;KX_STATE.edit=null;kxRender()}});
 document.addEventListener('click',async e=>{
  const button=e.target.closest('[data-kx]');if(!button)return;const action=button.dataset.kx,ctx=KX_STATE;if(!ctx)return;
  if(action==='back'){if(ctx.busy)return toast('Aguarda que o registo termine.');KX_STATE=null;return gate()}
  if(action==='export')return kxExport();
+ if(action==='csv'){const url=URL.createObjectURL(new Blob([kxCsv(ctx.kind,ctx.data.entries,ctx.month)],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=`kamba-${ctx.kind}-${ctx.month}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);return}
  if(ctx.busy)return;
  if(action==='cancel'){ctx.edit=null;return kxRender()}
  if(action==='edit'){ctx.edit=button.dataset.id;kxRender();$('#kx-desc').focus();return}
@@ -222,8 +234,6 @@ document.addEventListener('click',async e=>{
  }
 });
 
-</script>
-<script>
 /* Casais / Intergeracional: registos por linha, visibilidade privada por defeito.
    O servidor, não as variáveis locais, verifica todos os acessos e revisões. */
 let KS_STATE=null;
@@ -246,7 +256,7 @@ function ksCurrent(ctx){return KS_STATE===ctx&&ctx.epoch===SESSION_EPOCH&&user&&
 async function ksEnter(kind){
  if(!Object.hasOwn(KS_TITLES,kind)||!user)return;
  ++ENTER_SEQ;mode=null;KX_STATE=null;
- const ctx={kind,epoch:SESSION_EPOCH,owner:user.id,group:null,groups:[],invites:[],rows:[],people:[],pending:[],busy:false,edit:null,scope:'private',month:kxToday().slice(0,7)};KS_STATE=ctx;
+ const ctx={kind,epoch:SESSION_EPOCH,owner:user.id,group:null,groups:[],invites:[],rows:[],people:[],pending:[],busy:false,edit:null,createType:'income',goalId:'',kindFilter:'all',scope:'private',month:kxToday().slice(0,7)};KS_STATE=ctx;
  try{
   if(!SERVER_IMPLEMENTED.includes(kind))throw Error('Aplica primeiro a migração 016 no Supabase.');
   const [groups,invites]=await Promise.all([sb.from('kamba_groups').select('*').eq('kind',kind).order('created_at'),ksCall('kamba_pending_invites',{})]);
@@ -276,19 +286,28 @@ async function ksOpen(id){
  finally{ctx.busy=false;if(ksCurrent(ctx))ksBusy()}
 }
 function ksRowsMarkup(ctx){
- const filtered=ctx.rows.filter(x=>x.visibility===ctx.scope&&(x.data.date.slice(0,7)===ctx.month||['goal','reminder','gift'].includes(x.kind)));
- return filtered.map(r=>`<article class="panel ks-record"><h3>${esc(r.data.desc)}</h3><p>${esc(KS_TYPES[r.kind])} · ${esc(fd(r.data.date))} · ${r.visibility==='private'?'Privado':'Partilhado'} · ${r.author_id===user.id?'Meu registo':'Outro participante'}</p><strong>${ksMoney(r.data.amount)}</strong>${r.kind==='goal'?`<p>Contribuições visíveis: ${ksMoney(ksGoalProgress(r,ctx.rows))} / ${ksMoney(r.data.amount)}</p>`:''}${r.kind==='budget'?`<p>Despesas da categoria neste mês e visibilidade: ${ksMoney(ksBudgetSpent(r,ctx.rows))} / ${ksMoney(r.data.amount)}</p>`:''}${['reminder','gift'].includes(r.kind)?`<p>${r.data.done?'Concluído':'Pendente'}${!r.data.done&&r.data.date<kxToday()?' · Data ultrapassada':''}</p>`:''}${ksCanEdit(r,user.id,ctx.role)?`<div><button class="secondary" data-ks="edit" data-id="${esc(r.id)}" data-ks-write>Alterar</button> <button class="danger" data-ks="delete" data-id="${esc(r.id)}" data-ks-write>Eliminar</button></div>`:''}</article>`).join('')||'<p>Sem registos nesta seleção.</p>';
+ const filtered=ctx.rows.filter(x=>(!ctx.kindFilter||ctx.kindFilter==='all'||x.kind===ctx.kindFilter)&&x.visibility===ctx.scope&&(x.data.date.slice(0,7)===ctx.month||['goal','reminder','gift'].includes(x.kind)));
+ return filtered.map(r=>`<article class="panel ks-record"><h3>${esc(r.data.desc)}</h3><p>${esc(KS_TYPES[r.kind])} · ${esc(fd(r.data.date))} · ${r.visibility==='private'?'Privado':'Partilhado'} · ${r.author_id===user.id?'Meu registo':'Outro participante'}</p><strong>${ksMoney(r.data.amount)}</strong>${r.kind==='goal'?`<p>Contribuições visíveis: ${ksMoney(ksGoalProgress(r,ctx.rows))} / ${ksMoney(r.data.amount)}</p><p>Falta para o objetivo: ${ksMoney(BigInt(r.data.amount)>ksGoalProgress(r,ctx.rows)?BigInt(r.data.amount)-ksGoalProgress(r,ctx.rows):0n)}</p><button class="secondary" data-ks="contribute" data-id="${esc(r.id)}" data-ks-write>Registar contribuição</button>`:''}${r.kind==='budget'?`<p>Despesas da categoria neste mês e visibilidade: ${ksMoney(ksBudgetSpent(r,ctx.rows))} / ${ksMoney(r.data.amount)}</p><p>${ksBudgetSpent(r,ctx.rows)>BigInt(r.data.amount)?'Limite ultrapassado em '+ksMoney(ksBudgetSpent(r,ctx.rows)-BigInt(r.data.amount)):'Disponível no orçamento: '+ksMoney(BigInt(r.data.amount)-ksBudgetSpent(r,ctx.rows))}</p>`:''}${['reminder','gift'].includes(r.kind)?`<p>${r.data.done?'Concluído':'Pendente'}${!r.data.done&&r.data.date<kxToday()?' · Data ultrapassada':''}</p>`:''}${ksCanEdit(r,user.id,ctx.role)?`<div><button class="secondary" data-ks="edit" data-id="${esc(r.id)}" data-ks-write>Alterar</button> <button class="danger" data-ks="delete" data-id="${esc(r.id)}" data-ks-write>Eliminar</button></div>`:''}</article>`).join('')||'<p>Sem registos nesta seleção.</p>';
 }
 function ksFormMarkup(ctx){
- const edit=ctx.edit&&ctx.rows.find(x=>x.id===ctx.edit),d=edit?edit.data:{desc:'',amount:'',date:kxToday(),category:'',done:false};
+ const edit=ctx.edit&&ctx.rows.find(x=>x.id===ctx.edit),d=edit?edit.data:{desc:'',amount:'',date:kxToday(),category:'',done:false,goal_id:ctx.goalId||''};
+ const selectedType=edit?edit.kind:(ctx.createType||'income');
  const goals=ctx.rows.filter(x=>x.kind==='goal');
- return `<section class="panel"><h2>${edit?'Alterar registo':'Novo registo'}</h2><form id="ks-record-form"><div class="fg"><div class="field"><label for="ks-type">Tipo</label><select id="ks-type" ${edit?'disabled':''}>${Object.entries(KS_TYPES).map(([k,n])=>`<option value="${k}" ${edit&&edit.kind===k?'selected':''}>${esc(n)}</option>`).join('')}</select></div><div class="field"><label for="ks-visibility">Quem pode ver?</label><select id="ks-visibility" ${edit&&edit.author_id!==user.id?'disabled':''}><option value="private" ${!edit||edit.visibility==='private'?'selected':''}>Só eu (privado)</option><option value="shared" ${edit&&edit.visibility==='shared'?'selected':''} ${ctx.role==='viewer'?'disabled':''}>Participantes aceites (partilhado)</option></select></div><div class="field w"><label for="ks-desc">Descrição</label><input id="ks-desc" required maxlength="80" value="${esc(d.desc)}"></div><div class="field"><label for="ks-amount">Valor / limite / objetivo (Kz)</label><input id="ks-amount" type="number" required min="0" max="1000000000000" step="1" value="${d.amount}"><small>Zero apenas em lembretes.</small></div><div class="field"><label for="ks-date">Data / prazo</label><input id="ks-date" type="date" required value="${esc(d.date)}"></div><div class="field"><label for="ks-category">Categoria (obrigatória em orçamento)</label><input id="ks-category" maxlength="60" value="${esc(d.category||'')}"></div><div class="field"><label for="ks-goal">Objetivo (só para contribuição)</label><select id="ks-goal"><option value="">Seleciona se for contribuição</option>${goals.map(g=>`<option value="${esc(g.id)}" ${d.goal_id===g.id?'selected':''}>${esc(g.data.desc)} (${g.visibility==='private'?'privado':'partilhado'})</option>`).join('')}</select></div><div class="field"><label for="ks-done">Estado do lembrete/presente</label><select id="ks-done"><option value="false">Pendente</option><option value="true" ${d.done?'selected':''}>Concluído</option></select></div></div><p class="note">Partilhar permite aos participantes aceites ler este registo. Um titular pode alterar registos partilhados; nunca pode consultar os teus registos privados. Presentes e lembretes são planeamento, não despesas pagas.</p><button class="primary" data-ks-write>Guardar</button> ${edit?'<button type="button" class="secondary" data-ks="cancel">Cancelar alteração</button>':''}</form></section>`;
+ return `<section class="panel"><h2>${edit?'Alterar registo':'Novo registo'}</h2><form id="ks-record-form"><div class="fg"><div class="field"><label for="ks-type">Tipo</label><select id="ks-type" ${edit?'disabled':''}>${Object.entries(KS_TYPES).map(([k,n])=>`<option value="${k}" ${selectedType===k?'selected':''}>${esc(n)}</option>`).join('')}</select></div><div class="field"><label for="ks-visibility">Quem pode ver?</label><select id="ks-visibility" ${edit&&edit.author_id!==user.id?'disabled':''}><option value="private" ${!edit||edit.visibility==='private'?'selected':''}>Só eu (privado)</option><option value="shared" ${edit&&edit.visibility==='shared'?'selected':''} ${ctx.role==='viewer'?'disabled':''}>Participantes aceites (partilhado)</option></select></div><div class="field w"><label for="ks-desc">Descrição</label><input id="ks-desc" required maxlength="80" value="${esc(d.desc)}"></div><div class="field"><label for="ks-amount" id="ks-amount-label">${selectedType==='budget'?'Limite mensal':selectedType==='goal'?'Valor do objetivo':selectedType==='gift'?'Valor planeado':'Valor'} (Kz)</label><input id="ks-amount" type="number" required min="0" max="1000000000000" step="1" value="${d.amount}"><small>Zero apenas em lembretes.</small></div><div class="field"><label for="ks-date">Data / prazo</label><input id="ks-date" type="date" required value="${esc(d.date)}"></div><div class="field"><label for="ks-category">Categoria (obrigatória em orçamento)</label><input id="ks-category" maxlength="60" value="${esc(d.category||'')}"></div><div class="field" id="ks-goal-field" ${selectedType==='contribution'?'':'hidden'}><label for="ks-goal">Objetivo (só para contribuição)</label><select id="ks-goal"><option value="">Seleciona se for contribuição</option>${goals.map(g=>`<option value="${esc(g.id)}" ${d.goal_id===g.id?'selected':''}>${esc(g.data.desc)} (${g.visibility==='private'?'privado':'partilhado'})</option>`).join('')}</select></div><div class="field" id="ks-done-field" ${['reminder','gift'].includes(selectedType)?'':'hidden'}><label for="ks-done">Estado do lembrete/presente</label><select id="ks-done"><option value="false">Pendente</option><option value="true" ${d.done?'selected':''}>Concluído</option></select></div></div><p class="note">Partilhar permite aos participantes aceites ler este registo. Um titular pode alterar registos partilhados; nunca pode consultar os teus registos privados. Presentes e lembretes são planeamento, não despesas pagas.</p><button class="primary" data-ks-write>Guardar</button> ${edit?'<button type="button" class="secondary" data-ks="cancel">Cancelar alteração</button>':''}</form></section>`;
+}
+
+function ksTypeFields(){
+ const type=$('#ks-type');if(!type)return;const kind=type.value;
+ const goal=$('#ks-goal-field'),done=$('#ks-done-field'),label=$('#ks-amount-label'),amount=$('#ks-amount');
+ if(goal)goal.hidden=kind!=='contribution';if(done)done.hidden=!['reminder','gift'].includes(kind);
+ if(label)label.textContent=(kind==='budget'?'Limite mensal':kind==='goal'?'Valor do objetivo':kind==='gift'?'Valor planeado':'Valor')+' (Kz)';
+ if(amount)amount.min=kind==='reminder'?'0':'1';
 }
 function ksPeopleMarkup(ctx){return ctx.role==='owner'?`<section class="panel"><h2>Participantes e consentimento</h2><p>Novos convites começam em consulta. A pessoa tem de aceitar na própria conta.</p><form id="ks-invite-form"><div class="fg"><div class="field"><label for="ks-email">E-mail exato da pessoa</label><input id="ks-email" type="email" required maxlength="254"></div><div class="field"><label for="ks-role">Acesso aos registos partilhados</label><select id="ks-role"><option value="viewer">Consulta</option><option value="editor">Criar e alterar os próprios registos</option></select></div></div><button class="primary" data-ks-write ${ctx.active?'':'disabled'}>Guardar convite</button></form><p class="mu">A pessoa deve ter uma conta com esse e-mail. O convite aparece nessa conta; não é enviado e-mail automaticamente.</p>${ctx.people.map(m=>`<p>${esc(m.email)} · ${m.role==='viewer'?'Consulta':'Edição dos próprios registos'} <button class="danger" data-ks="remove" data-id="${esc(m.user_id)}" data-ks-write>Revogar acesso</button></p>`).join('')}${ctx.pending.map(i=>`<p>${esc(i.invited_email)} · Convite ${new Date(i.expires_at)>new Date()?'pendente':'expirado'} <button class="danger" data-ks="revoke" data-id="${esc(i.id)}" data-ks-write>Revogar convite</button></p>`).join('')}</section>`:`<section class="panel"><p>Para sair, exporta primeiro os teus registos. A saída termina as consultas futuras e mantém os registos históricos no espaço, respeitando a privacidade original.</p><button class="danger" data-ks="leave" data-ks-write>Sair deste espaço</button></section>`}
 function ksRenderGroup(){
  const ctx=KS_STATE;if(!ctx||!ctx.group)return;
  const total=ksSummary(ctx.rows,ctx.month,ctx.scope);
- ksShell(`<h2>${esc(ctx.group.title)}</h2><div class="ks-toolbar"><button class="secondary" data-ks="refresh">Atualizar dados</button><button class="secondary" data-ks="export">Exportar registos visíveis</button></div>${ctx.active?`<div class="fg"><div class="field"><label for="ks-scope">Consultar</label><select id="ks-scope"><option value="private" ${ctx.scope==='private'?'selected':''}>Os meus registos privados</option><option value="shared" ${ctx.scope==='shared'?'selected':''}>Registos partilhados</option></select></div><div class="field"><label for="ks-month">Mês</label><input id="ks-month" type="month" value="${esc(ctx.month)}"></div></div><div class="cards"><section class="panel"><h3>Receitas</h3><strong>${ksMoney(total.income)}</strong></section><section class="panel"><h3>Despesas</h3><strong>${ksMoney(total.expense)}</strong></section><section class="panel"><h3>Saldo dos registos</h3><strong>${ksMoney(total.balance)}</strong></section><section class="panel"><h3>Contribuições para objetivos</h3><strong>${ksMoney(total.contributed)}</strong></section></div><p class="mu">Os valores correspondem à seleção e ao mês. Contribuições não são contadas outra vez como despesas. Lembretes aparecem na aplicação; não são notificações automáticas.</p>${ksFormMarkup(ctx)}<h2>Registos</h2>${ksRowsMarkup(ctx)}`:'<p class="note">A subscrição do titular está inativa. Os registos financeiros estão bloqueados. A revogação de participantes continua disponível.</p>'}${ksPeopleMarkup(ctx)}`);
+ ksShell(`<h2>${esc(ctx.group.title)}</h2><div class="ks-toolbar"><button class="secondary" data-ks="refresh">Atualizar dados</button><button class="secondary" data-ks="export">Exportar registos visíveis</button></div>${ctx.active?`<div class="fg"><div class="field"><label for="ks-scope">Consultar</label><select id="ks-scope"><option value="private" ${ctx.scope==='private'?'selected':''}>Os meus registos privados</option><option value="shared" ${ctx.scope==='shared'?'selected':''}>Registos partilhados</option></select></div><div class="field"><label for="ks-month">Mês</label><input id="ks-month" type="month" value="${esc(ctx.month)}"></div></div><div class="cards"><section class="panel"><h3>Receitas</h3><strong>${ksMoney(total.income)}</strong></section><section class="panel"><h3>Despesas</h3><strong>${ksMoney(total.expense)}</strong></section><section class="panel"><h3>Saldo dos registos</h3><strong>${ksMoney(total.balance)}</strong></section><section class="panel"><h3>Contribuições para objetivos</h3><strong>${ksMoney(total.contributed)}</strong></section></div><p class="mu">Os valores correspondem à seleção e ao mês. Contribuições não são contadas outra vez como despesas. Lembretes aparecem na aplicação; não são notificações automáticas.</p>${ksFormMarkup(ctx)}<h2>Registos</h2><div class="field"><label for="ks-kind-filter">Mostrar</label><select id="ks-kind-filter"><option value="all">Todos os tipos</option>${Object.entries(KS_TYPES).map(([k,n])=>`<option value="${k}" ${ctx.kindFilter===k?'selected':''}>${esc(n)}</option>`).join('')}</select></div>${ksRowsMarkup(ctx)}`:'<p class="note">A subscrição do titular está inativa. Os registos financeiros estão bloqueados. A revogação de participantes continua disponível.</p>'}${ksPeopleMarkup(ctx)}`);
 }
 function ksBusy(){document.querySelectorAll('[data-ks-write]').forEach(x=>{if(KS_STATE&&KS_STATE.busy)x.disabled=true;else x.disabled=!!(x.closest('#ks-invite-form')&&KS_STATE&&KS_STATE.group&&!KS_STATE.active)})}
 async function ksWrite(work,refresh=true){const ctx=KS_STATE;if(!ctx||ctx.busy)return;ctx.busy=true;ksBusy();try{await work();if(!ksCurrent(ctx))return;ctx.busy=false;if(refresh&&ctx.group)await ksOpen(ctx.group.id);else if(refresh)await ksEnter(ctx.kind)}catch(e){if(ksCurrent(ctx))toast(e.message||'Não foi possível guardar.')}finally{ctx.busy=false;if(ksCurrent(ctx))ksBusy()}}
@@ -308,7 +327,7 @@ document.addEventListener('submit',e=>{
  if(e.target.id==='ks-create'){const title=$('#ks-title').value.trim();return ksWrite(()=>ksCall('kamba_create_group',{p_kind:ctx.kind,p_title:title}))}
  if(e.target.id==='ks-invite-form'){const email=$('#ks-email').value.trim(),role=$('#ks-role').value;return ksWrite(()=>ksCall('kamba_invite',{p_group:ctx.group.id,p_email:email,p_role:role}))}
 });
-document.addEventListener('change',e=>{const ctx=KS_STATE;if(!ctx||ctx.busy)return;if(e.target.id==='ks-scope'){ctx.scope=e.target.value;ctx.edit=null;ksRenderGroup()}if(e.target.id==='ks-month'&&/^\d{4}-\d{2}$/.test(e.target.value)){ctx.month=e.target.value;ctx.edit=null;ksRenderGroup()}});
+document.addEventListener('change',e=>{const ctx=KS_STATE;if(!ctx||ctx.busy)return;if(e.target.id==='ks-type'){ctx.createType=e.target.value;ksTypeFields();return}if(e.target.id==='ks-kind-filter'){ctx.kindFilter=e.target.value;ksRenderGroup();return}if(e.target.id==='ks-scope'){ctx.scope=e.target.value;ctx.edit=null;ksRenderGroup()}if(e.target.id==='ks-month'&&/^\d{4}-\d{2}$/.test(e.target.value)){ctx.month=e.target.value;ctx.edit=null;ksRenderGroup()}});
 document.addEventListener('click',e=>{
  const b=e.target.closest('[data-ks]'),ctx=KS_STATE;if(!b||!ctx||ctx.busy)return;const action=b.dataset.ks,id=b.dataset.id;
  if(action==='back'){KS_STATE=null;return gate()}
@@ -316,8 +335,9 @@ document.addEventListener('click',e=>{
  if(action==='open')return ksOpen(id);
  if(action==='refresh')return ksOpen(ctx.group.id);
  if(action==='export')return ksExport();
+ if(action==='contribute'){const goal=ctx.rows.find(r=>r.id===id&&r.kind==='goal');if(!goal)return;ctx.edit=null;ctx.createType='contribution';ctx.goalId=id;ksRenderGroup();$('#ks-desc').focus();return}
  if(action==='edit'){ctx.edit=id;ksRenderGroup();$('#ks-desc').focus();return}
- if(action==='cancel'){ctx.edit=null;return ksRenderGroup()}
+ if(action==='cancel'){ctx.edit=null;ctx.createType='income';ctx.goalId='';return ksRenderGroup()}
  if(action==='accept'||action==='decline')return ksWrite(()=>ksCall('kamba_accept_invite',{p_invite:id,p_accept:action==='accept'}));
  if(action==='revoke'&&confirm('Revogar este convite?'))return ksWrite(()=>ksCall('kamba_revoke_invite',{p_invite:id}));
  if(action==='remove'&&confirm('Revogar o acesso deste participante? Os registos históricos são mantidos.'))return ksWrite(()=>ksCall('kamba_remove_member',{p_group:ctx.group.id,p_user:id}));
@@ -325,9 +345,6 @@ document.addEventListener('click',e=>{
  if(action==='delete'&&confirm('Eliminar este registo?')){const record=ctx.rows.find(x=>x.id===id);if(record)return ksWrite(()=>ksCall('kamba_delete_record',{p_id:id,p_rev:record.rev}))}
 });
 
-</script>
-<script>
-(()=>{
 const SB_URL="https://cqbvwjtgilnsnnplnbbr.supabase.co",SB_KEY="sb_publishable_IST8t394Xz3XF0pAAP-Xig_c3OPhqWd";
 const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;
 let SYNCING=0,PENDING=false,OFFV=false,DEFERRED=null,UPDW=null,UPD=false;
@@ -675,7 +692,7 @@ function tblOpen(){TB.ds=mode==="personal"?"tx":(tab==="sales"?"sales":tab);TB.q
  <div class="tf"><div class="field"><label for="tq">Pesquisar</label><input id="tq" autocomplete="off"></div><div class="field"><label for="tsc">Período</label><select id="tsc" ${d.date?"":"disabled"}><option value="month">Mês em análise</option><option value="all">Tudo</option></select></div><div class="field"><label for="tsz">Linhas por página</label><select id="tsz"><option>10</option><option selected>20</option><option>50</option></select></div><button class="secondary" data-a="tcp">Colunas</button></div><div id="tvb"></div></div>`;
  $("#tsc").value=TB.scope;$("#tv").hidden=false;tblView()}
 function reportModel(){
- const ym=month, fmt=ym.split("-").reverse().join("/"), sumBy=(rows,key,val)=>{const out={};rows.forEach(r=>{const k=key(r)||"Sem categoria";out[k]=(out[k]||0)+Number(val(r)||0)});return Object.entries(out).sort((a,b)=>b[1]-a[1])};
+ const ym=month, fmt=ym.split("-").reverse().join("/"), sumBy=(rows,key,val)=>{const out=Object.create(null);rows.forEach(r=>{const k=key(r)||"Sem categoria";out[k]=(out[k]||0)+Number(val(r)||0)});return Object.entries(out).sort((a,b)=>b[1]-a[1])};
  if(mode==="personal"){
   const rows=(S.tx||[]).filter(t=>(t.date||"").slice(0,7)===ym),inc=rows.filter(t=>t.type==="income"),exp=rows.filter(t=>t.type==="expense"),income=sum(inc,t=>t.amt),expenses=sum(exp,t=>t.amt);
   return {title:`Relatório pessoal — ${fmt}`,period:ym,metrics:[["Receitas",income],["Despesas",expenses],["Saldo do período",income-expenses]],tables:[{title:"Despesas por categoria",rows:sumBy(exp,t=>t.cat,t=>t.amt)},{title:"Receitas por categoria",rows:sumBy(inc,t=>t.cat,t=>t.amt)},{title:"Despesas por familiar",rows:sumBy(exp,t=>t.memberName||((S.members||[]).find(m=>m.id===t.memberId)||{}).name||"Sem associação",t=>t.amt)}]};
@@ -1205,8 +1222,8 @@ function instOpen(){const ios=/iphone|ipad|ipod/i.test(navigator.userAgent)||(na
  m.innerHTML=`<div class="mbox" role="dialog" aria-modal="true" aria-label="Instalar a aplicação"><div style="display:flex;gap:12px;align-items:center">${LOGO}<div><h3 style="margin:0">Instalar o Kamba Gestão</h3><div class="mu" style="font-size:13px">${std?"Já está instalada neste dispositivo.":"Abre como uma aplicação, sem o navegador."}</div></div></div>
  ${DEFERRED&&!std?'<button class="primary full" style="margin-top:14px" data-a="instgo">Instalar agora</button>':""}
  <ol><li><strong>Android (Chrome):</strong> menu ⋮ e «Instalar aplicação» ou «Adicionar ao ecrã principal».</li><li><strong>iPhone e iPad (Safari):</strong> botão Partilhar e «Adicionar ao ecrã principal»${ios?" (é o teu caso)":""}.</li><li><strong>Computador (Chrome ou Edge):</strong> ícone de instalar na barra de endereço, ou menu e «Instalar Kamba Gestão».</li></ol>
- <p style="font-size:13px"><strong>Versão de teste em ficheiro único:</strong> usa a aplicação com internet. Esta página não instala nem atualiza um service worker.</p>
- <div class="note" style="margin:0 0 12px"><strong>Limitações:</strong> esta versão de teste não garante abertura sem internet. Os teus dados financeiros ainda <strong>não</strong> ficam disponíveis offline: a cache local identifica a conta e o espaço de trabalho, mas não está cifrada. O modo offline completo continua pendente. Pagamentos, recuperação de conta e alterações de segurança exigem sempre internet. O suporte varia com o navegador e o dispositivo (por exemplo, o iPhone pode apagar dados de sites pouco usados).</div>
+ <p style="font-size:13px"><strong>Versão em ficheiro único:</strong> usa a aplicação com internet. Esta página não instala nem atualiza um service worker.</p>
+ <div class="note" style="margin:0 0 12px"><strong>Limitações:</strong> esta versão não garante abertura sem internet. Os teus dados financeiros ainda <strong>não</strong> ficam disponíveis offline: a cache local identifica a conta e o espaço de trabalho, mas não está cifrada. O modo offline completo continua pendente. Pagamentos, recuperação de conta e alterações de segurança exigem sempre internet. O suporte varia com o navegador e o dispositivo (por exemplo, o iPhone pode apagar dados de sites pouco usados).</div>
  <button class="secondary full" data-a="mclose">Fechar</button></div>`}
 function updBanner(w){UPDW=w;if($("#upd"))return;const b=document.createElement("div");b.id="upd";b.setAttribute("role","status");b.innerHTML='Nova versão disponível. <button class="secondary small" data-a="doupd">Atualizar agora</button>';document.body.appendChild(b)}
 async function init(){OFFV=false;
