@@ -429,6 +429,8 @@ document.addEventListener('click',e=>{
 
 const SB_URL="https://cqbvwjtgilnsnnplnbbr.supabase.co",SB_KEY="sb_publishable_IST8t394Xz3XF0pAAP-Xig_c3OPhqWd";
 const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;
+const APP_BUILD="2026.10.19.13";
+let DIAG_SEQ=0,DIAG_REPORT=null;
 let SYNCING=0,PENDING=false,OFFV=false,DEFERRED=null,UPDW=null,UPD=false;
 let SESSION_EPOCH=0,ENTER_SEQ=0,SERVER_READY=["personal","business"],SERVER_IMPLEMENTED=[],COMMERCE_READY=false,TRANSFER_AVAILABLE=false,ADMIN_TEST_ACCESS=false,ALL_PLAN_ACCESS=false;
 let user=null,WS={},SUBS=[],PL={},HAS={personal:false,business:false},ENT={personal:false,business:false};
@@ -456,7 +458,7 @@ const stateKey=(m=mode)=>user&&user.id&&WS[m]?"kamba_v3_"+user.id+"_"+WS[m]+"_"+
 const SAVE_JOBS=new Map();
 function resetAccess(){SUBS=[];for(const k of ["personal","business","senior","raiz","couples","intergenerational"]){ENT[k]=false;HAS[k]=false}}
 function resetSession(){
- SESSION_EPOCH++;ENTER_SEQ++;if(typeof KX_STATE!=="undefined")KX_STATE=null;if(typeof KS_STATE!=="undefined")KS_STATE=null;for(const job of SAVE_JOBS.values())clearTimeout(job.timer);SAVE_JOBS.clear();
+ DIAG_SEQ++;DIAG_REPORT=null;SESSION_EPOCH++;ENTER_SEQ++;if(typeof KX_STATE!=="undefined")KX_STATE=null;if(typeof KS_STATE!=="undefined")KS_STATE=null;for(const job of SAVE_JOBS.values())clearTimeout(job.timer);SAVE_JOBS.clear();
  PENDING=false;mode=null;S=null;WS={};PL={};SERVER_READY=["personal","business"];SERVER_IMPLEMENTED=[];COMMERCE_READY=false;TRANSFER_AVAILABLE=false;ADMIN_TEST_ACCESS=false;ALL_PLAN_ACCESS=false;resetAccess();
  for(const id of ["md","tv"]){const el=$("#"+id);if(el){el.hidden=true;el.innerHTML=""}}
 }
@@ -482,7 +484,7 @@ const save=()=>{
 const th=rd("kamba_v2_theme");if(th)document.documentElement.dataset.theme=th;
 
 const price=c=>{const p=PL[c];return p&&Number.isSafeInteger(Number(p.price))&&Number(p.price)>0?money(Number(p.price))+(p.period_months===12?" por ano":" / "+p.period_months+" meses"):"Preço indisponível"};
-const PLN=c=>(c==="combo"?"Todos os planos":null)||(PL[c]&&PL[c].name)||((PLAN_CATALOG[c]&&PLAN_CATALOG[c].name)||c);
+const PLN=c=>(PL[c]&&PL[c].name)||((PLAN_CATALOG[c]&&PLAN_CATALOG[c].name)||c);
 // Catálogo comercial: os planos adicionais só ficam disponíveis para compra após a migração segura do servidor.
 const PLAN_CATALOG={
  personal:{name:"Kamba Particular + Familiar",features:["Receitas e despesas pessoais e familiares","Orçamento, metas e gráficos","Associação de movimentos a familiares"],ready:true},
@@ -493,7 +495,7 @@ const PLAN_CATALOG={
  business:{name:"Kamba Empresarial",features:["Vendas, stock e produtos","Despesas, caixa e valores a receber","Documentos internos e exportação"],ready:true},
  combo:{name:"Todos os planos",features:["Inclui todas as áreas disponíveis","Dados separados e privacidade mantida"],ready:true}
 };
-const planReady=c=>!!(PLAN_CATALOG[c]&&PLAN_CATALOG[c].ready&&COMMERCE_READY&&SERVER_IMPLEMENTED.includes(c));
+const planReady=c=>!!(PLAN_CATALOG[c]&&PLAN_CATALOG[c].ready&&COMMERCE_READY&&SERVER_IMPLEMENTED.includes(c)&&(c!=="combo"||ALL_PLAN_ACCESS===true));
 const catalogPrice=price;
 const planSaleStatus=c=>!PL[c]?"Catálogo indisponível":!planReady(c)?"Preparação ou atualização pendente":PL[c].active?"Disponível para compra":"Venda desativada";
 
@@ -828,7 +830,7 @@ async function payOpen(){if((typeof KX_STATE!=="undefined"&&KX_STATE&&KX_STATE.b
  const continued=groups.filter(g=>g.last_no<g.installments||g.open_id).map(g=>{const canContinue=!!g.total&&!g.closed&&Number(g.confirmed)===Number(g.last_no)&&g.last_no<g.installments;return `<div class="tx"><div class="tb"><strong>${esc(g.name||PLN(g.plan))}</strong><small>${g.total?"Total contratado: "+money(g.total):"Preço contratado antigo ainda não regularizado"} · ${g.confirmed}/${g.installments} prestações confirmadas</small></div><div>${g.open_id?`<button class="secondary" data-a="pdet" data-id="${esc(g.open_id)}">Ver pedido em aberto</button>`:canContinue?`<button class="primary" data-a="pcontinue" data-id="${esc(g.group_id)}" data-plan="${esc(g.plan)}" data-n="${g.installments}">Criar prestação seguinte</button>`:'<span class="mu">Requer verificação administrativa.</span>'}</div></div>`}).join("");
 
  const list=rq.map(r=>{const st=effSt(r),open=st==="pending"||st==="awaiting";return `<div class="tx"><div class="tb"><strong>${esc(r.quoted_name||PLN(r.plan))} · ${money(r.amount)}${r.installments>1?" · prestação "+r.installment_no+"/"+r.installments:""}</strong><small>${esc(r.reference)} · ${fd(r.created_at.slice(0,10))}</small></div><div class="ta"><span class="st ${stc(st)}">${PST[st]||esc(st)}</span><div>${open?`<button class="secondary small" data-a="pdet" data-id="${esc(r.id)}">Ver dados bancários</button>`:""}${st==="pending"?`<button class="danger small" data-a="pcan" data-id="${esc(r.id)}">Cancelar</button>`:""}</div></div></div>`}).join("")||'<div class="empty">Ainda não fizeste pedidos.</div>';
- t.innerHTML=`<div style="max-width:720px;margin:0 auto"><div class="topline"><h2>Plano e pagamentos</h2><div style="display:flex;gap:8px;flex-wrap:wrap">${ad.data===true?'<button class="secondary" data-a="padm">Administração de pagamentos</button>':""}<button class="primary" data-a="tclose">Fechar</button></div></div>
+ t.innerHTML=`<div style="max-width:720px;margin:0 auto"><div class="topline"><h2>Plano e pagamentos</h2><div style="display:flex;gap:8px;flex-wrap:wrap">${ad.data===true?'<button class="secondary" data-a="padm">Administração de pagamentos</button><button class="secondary" data-a="diagnostics">Verificar instalação</button>':""}<button class="primary" data-a="tclose">Fechar</button></div></div>
  <section class="panel"><h3>Os teus planos</h3>${subsH}</section>
  <section class="panel" style="margin-top:14px"><h3>Planos, preços e o que inclui</h3><div class="modes" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin:8px 0 0">${plansH}</div><div class="note" style="margin-top:12px"><strong>Vantagens e limitações:</strong> os planos marcados «Em integração» são apresentados para deixar visíveis os preços e a oferta planeada, mas ainda não podem ser comprados. O servidor e as regras de acesso têm de ser atualizados antes de ativar esses planos. Particular/Família não inclui vendas ou stock; Empresarial não inclui a área familiar. Os documentos empresariais atuais são internos, não são faturas fiscais válidas em Angola.</div><button class="secondary full" style="min-height:46px;margin-top:10px" data-a="cloudhelp">☁️ Ler política de privacidade e segurança</button></section>
  <section class="panel" style="margin-top:14px"><h3>Nova compra ou renovação anual (até 12 prestações)</h3>${sel}${cards}<p class="mu" style="font-size:12px">Os dados bancários só são mostrados depois de criares a cobrança. Nunca envies PINs, palavras-passe nem códigos de autenticação.</p></section>
@@ -882,13 +884,42 @@ async function pclaim(){const id=$("#pid").value,f=$("#pf").files[0];let path=nu
   path=(user.id||"u")+"/"+id+"-"+Date.now()+"."+ext;const u=await sb.storage.from("comprovativos").upload(path,f,{contentType:f.type});if(u.error)return toast("Não foi possível enviar o comprovativo: "+u.error.message)}
  const r=await sb.rpc("claim_payment",{p_id:id,p_proof:path});if(r.error)return toast("Não foi possível registar: "+r.error.message);
  $("#md").hidden=true;$("#md").innerHTML="";toast("Registado. A aguardar confirmação do administrador.");payOpen()}
+async function diagnosticsOpen(){
+ if(!user||!user.id)return;
+ const epoch=SESSION_EPOCH,owner=user.id,seq=++DIAG_SEQ,t=$('#tv');
+ const current=()=>epoch===SESSION_EPOCH&&user&&user.id===owner&&seq===DIAG_SEQ;
+ let admin;try{admin=await sb.rpc('is_admin')}catch(e){if(current())toast('Não foi possível confirmar o acesso administrativo.');return}
+ if(!current())return;if(admin.error||admin.data!==true)return toast('Esta verificação está disponível apenas ao administrador.');
+ t.hidden=false;t.innerHTML='<div class="panel" role="status">A verificar a instalação, sem alterar dados...</div>';
+ const jobs=await Promise.allSettled([loadPlans(),sb.from('workspaces').select('id,kind'),sb.from('subscriptions').select('plan,status,expires_at'),sb.from('kamba_groups').select('id,kind'),sb.from('kamba_group_invites').select('id,status')]);
+ if(!current())return;const result=i=>jobs[i].status==='fulfilled'?jobs[i].value:{error:true};
+ const catalog=result(0),workspaces=result(1),subs=result(2),groups=result(3),invites=result(4);
+ if(subs.error)resetAccess();else{SUBS=subs.data||[];entCalc()}
+ const codes=Object.keys(PLAN_CATALOG),missing=codes.filter(c=>!PL[c]);
+ const checks=[
+ ['Catálogo dos sete planos',!catalog.error&&missing.length===0,missing.length?'Faltam: '+missing.join(', '):catalog.error?'A consulta falhou.':'Os sete registos foram carregados.'],
+ ['Atualização comercial 019',COMMERCE_READY,'Confirma a resposta de capacidade comercial do servidor.'],
+ ['Acesso administrativo e pacote completo 022',ALL_PLAN_ACCESS&&ADMIN_TEST_ACCESS,'Se estiver pendente, verificar a atualização 022 e voltar a entrar na conta.'],
+ ['Implementação das seis áreas',codes.filter(c=>c!=='combo').every(c=>SERVER_IMPLEMENTED.includes(c)),'Capacidade anunciada pelo servidor; não prova que cada operação funciona.'],
+ ['Consulta de espaços individuais',!workspaces.error,workspaces.error?'A consulta falhou.':'Consulta respondeu sem erro.'],
+ ['Consulta de subscrições',!subs.error,subs.error?'A consulta falhou; os acessos locais foram bloqueados.':'Consulta respondeu sem erro.'],
+ ['Consulta de espaços partilhados',!groups.error,groups.error?'Verificar a instalação 016 e as permissões.':'Consulta respondeu sem erro.'],
+ ['Consulta de convites',!invites.error,invites.error?'Verificar a instalação 016 e as permissões.':'Consulta respondeu sem erro.']
+ ];
+ const createdAt=new Date().toISOString();DIAG_REPORT={owner,epoch,text:['Kamba Gestão — verificação de instalação','Versão do ficheiro: '+APP_BUILD,'Data: '+createdAt,'',...checks.map(([name,ok,note])=>(ok?'OK':'VERIFICAR')+' — '+name+' — '+note),'','Sem alterações na base de dados. Não testa escrita, isolamento entre contas, pagamentos ou antivírus. Não inclui e-mail, tokens, chaves nem movimentos financeiros.'].join('\n')};
+ t.innerHTML=`<div style="max-width:800px;margin:auto"><div class="topline"><h2>Verificação de instalação</h2><button class="primary" data-a="tclose">Fechar</button></div><p>Versão do ficheiro: <strong>${esc(APP_BUILD)}</strong></p>${checks.map(([name,ok,note])=>`<section class="panel" style="margin:10px 0"><h3>${ok?'✓':'⚠'} ${esc(name)}</h3><p>${ok?'Consulta/capacidade confirmada':'Precisa de verificação'} — ${esc(note)}</p></section>`).join('')}<p class="note">Esta verificação só consulta dados da sessão. Não confirma gravações, privacidade entre contas ou pagamentos. Não foram criados nem alterados registos.</p><div class="row2"><button class="secondary" data-a="diagnostics">Verificar novamente</button><button class="secondary" data-a="diag-export">Descarregar relatório sem dados pessoais</button><button class="secondary" data-a="padm">Voltar à administração</button></div></div>`;
+}
+function diagnosticsExport(){
+ if(!DIAG_REPORT||!user||DIAG_REPORT.owner!==user.id||DIAG_REPORT.epoch!==SESSION_EPOCH)return;
+ const url=URL.createObjectURL(new Blob([DIAG_REPORT.text],{type:'text/plain;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='kamba-verificacao-instalacao.txt';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
 async function padm(){const epoch=SESSION_EPOCH;const t=$("#tv");t.innerHTML='<div style="max-width:720px;margin:0 auto"><p class="mu">A carregar...</p></div>';
  let results;try{results=await Promise.all([sb.rpc("admin_get_settings"),sb.rpc("admin_list_payments"),sb.rpc("admin_get_config"),loadPlans(),sb.rpc("kamba_admin_unquoted_groups")])}catch(e){if(epoch===SESSION_EPOCH)t.innerHTML=ERRBOX;return}
  if(epoch!==SESSION_EPOCH)return;const[s1,l,cf,plansResult,unquoted]=results;
  if(s1.error||l.error||cf.error||plansResult.error||unquoted.error){t.innerHTML=ERRBOX;return}
 
  AD.rows=l.data||[];const c=s1.data||{},ck=(id,v,tx)=>`<label style="display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);margin:0"><input id="${id}" type="checkbox" style="width:auto" ${v?"checked":""}>${tx}</label>`;
- t.innerHTML=`<div style="max-width:720px;margin:0 auto"><div class="topline"><h2>Configurações de pagamento</h2><div style="display:flex;gap:8px"><button class="secondary" data-a="plano">Voltar</button><button class="primary" data-a="tclose">Fechar</button></div></div>
+ t.innerHTML=`<div style="max-width:720px;margin:0 auto"><div class="topline"><h2>Configurações de pagamento</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="secondary" data-a="diagnostics">Verificar instalação</button><button class="secondary" data-a="plano">Voltar</button><button class="primary" data-a="tclose">Fechar</button></div></div>
  <section class="panel"><h3>Conta para transferências</h3><form data-f="aset"><div class="fg"><div class="field"><label for="at">Tipo de conta</label><select id="at"><option value="personal">Pessoal</option><option value="business">Empresarial</option></select></div>
  <div class="field"><label for="ah">Nome do titular</label><input id="ah" maxlength="100" value="${esc(c.holder||"")}"></div><div class="field"><label for="ab">Banco</label><input id="ab" maxlength="60" value="${esc(c.bank||"")}"></div>
  <div class="field"><label for="ai">IBAN (AO + 23 dígitos)</label><input id="ai" maxlength="40" value="${esc(c.iban||"")}"></div><div class="field"><label for="af">Ativa desde</label><input id="af" type="date" value="${esc(c.active_from||"")}"></div>
@@ -1119,6 +1150,8 @@ function demoData(){
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#md").hidden){$("#md").hidden=true;$("#md").innerHTML=""}});
 document.addEventListener("click",e=>{
  const b=e.target.closest("[data-a]");if(!b)return;const a=b.dataset.a,id=b.dataset.id;
+ if(a==="diagnostics")return diagnosticsOpen();
+ if(a==="diag-export")return diagnosticsExport();
  if(a==="pnew")return pnew();
  if(a==="profile")return profileOpen();
  if(a==="cloudhelp")return cloudHelpOpen();
@@ -1167,7 +1200,7 @@ document.addEventListener("click",e=>{
  if(a==="relatorio")return reportOpen();
  if(a==="relcsv")return reportExport();
  if(a==="tbl")return tblOpen();
- if(a==="tclose"){$("#tv").hidden=true;$("#tv").innerHTML="";return}
+ if(a==="tclose"){DIAG_SEQ++;$("#tv").hidden=true;$("#tv").innerHTML="";return}
  if(a==="tsort"){TB.sort=TB.sort.k===id?{k:id,d:-TB.sort.d}:{k:id,d:1};TB.page=0;return tblView()}
  if(a==="tcp"){TB.cp=!TB.cp;return tblView()}
  if(a==="tpg"){TB.page+=+id;return tblView()}
