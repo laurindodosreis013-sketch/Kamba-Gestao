@@ -104,22 +104,234 @@ textarea{width:100%;border:1px solid var(--ln);border-radius:10px;padding:11px 1
 @media(max-width:560px){.gate-actions{display:grid;grid-template-columns:1fr 1fr}.gate-actions button{width:100%;font-size:14px;padding:12px 9px}.gate-actions .plan-cta{grid-column:1/-1}.cloud-help{left:10px;bottom:10px;min-height:46px;padding:11px 14px;font-size:13px}.help-box{padding:16px}}
 
 </style>
-<link rel="stylesheet" href="extra_areas.css">
-<link rel="stylesheet" href="shared_areas.css">
+<style>
+.kx-area main{max-width:1100px;margin:auto;padding:24px 16px}.kx-area .panel strong{font-size:1.4em}.kx-area .tb strong{font-size:1em}.kx-area .tb small{display:block;margin-top:6px}.kx-area .ta{min-width:140px}.kx-area .ta button{margin:6px 0 0 6px}.kx-area form button{min-height:48px}.kx-area input,.kx-area select{max-width:100%}.kx-senior{font-size:20px;line-height:1.6}.kx-senior button,.kx-senior input,.kx-senior select{font-size:20px;min-height:56px}.kx-senior h1{font-size:1.4em}.kx-senior h2{font-size:1.35em}.kx-senior label{font-size:1em;font-weight:700}.kx-senior small,.kx-senior .mu{font-size:.95em}.kx-senior .tx{padding:18px 0}.kx-area button:focus-visible,.kx-area input:focus-visible,.kx-area select:focus-visible{outline:3px solid #d97706;outline-offset:3px}@media(max-width:640px){.kx-area header{align-items:flex-start;flex-direction:column}.kx-area .hb{width:100%;display:flex;flex-wrap:wrap}.kx-area .tx{align-items:flex-start;gap:12px;flex-wrap:wrap}.kx-area .cards{grid-template-columns:1fr}.kx-senior .fg{grid-template-columns:1fr}.kx-area .ta{width:100%;text-align:left}.kx-area .row2{flex-wrap:wrap}}
+
+</style>
+<style>
+.ks-area main{max-width:1100px;margin:auto;padding:24px 16px}.ks-area form button,.ks-area .hb button{min-height:44px}.ks-area .ks-record{margin:12px 0}.ks-area .ks-record h3{overflow-wrap:anywhere}.ks-area .ks-toolbar{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}.ks-area .panel strong{font-size:1.25em}.ks-area .fg{margin-bottom:12px}.ks-area input,.ks-area select{max-width:100%}.ks-area button:focus-visible,.ks-area input:focus-visible,.ks-area select:focus-visible{outline:3px solid #d97706;outline-offset:3px}@media(max-width:640px){.ks-area header{align-items:flex-start;flex-direction:column}.ks-area .hb{display:flex;flex-wrap:wrap}.ks-area .cards{grid-template-columns:1fr}.ks-area .fg{grid-template-columns:1fr}}
+
+</style>
 </head>
 <body>
 <div id="app"></div>
 <div class="toast" id="toast" role="status"></div>
 <div id="pv" hidden></div><div id="tv" hidden></div><div id="md" hidden></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
-<script src="extra_areas.js"></script>
-<script src="shared_areas.js"></script>
+<script>
+/* Áreas individuais Mais Velho e Raiz. Persistência por workspace em app_state.
+   Não concede acesso a acompanhantes nem altera dados dos módulos existentes. */
+let KX_STATE=null;
+const KX_CONFIG={
+ senior:{title:'Meu Kamba Mais Velho',types:{income:'Dinheiro que entrou',expense:'Dinheiro que saiu'},incoming:['income'],outgoing:['expense']},
+ raiz:{title:'Meu Kamba Raiz',types:{sale:'Venda recebida',income:'Outra receita',expense:'Despesa paga',purchase:'Compra paga',withdrawal:'Retirada pessoal'},incoming:['sale','income'],outgoing:['expense','purchase','withdrawal']}
+};
+const kxToday=()=>new Date(Date.now()+3600000).toISOString().slice(0,10);
+function kxDate(value){if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const d=new Date(value+'T00:00:00Z');return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===value}
+function kxEntry(kind,x){
+ const cfg=KX_CONFIG[kind];
+ return !!(cfg&&x&&typeof x.id==='string'&&x.id.length>0&&x.id.length<=64&&Object.hasOwn(cfg.types,x.type)&&typeof x.desc==='string'&&x.desc.trim().length>0&&x.desc.length<=80&&Number.isSafeInteger(x.amount)&&x.amount>0&&x.amount<=1000000000000&&kxDate(x.date));
+}
+function kxDocument(kind,data){
+ if(!data||data._kambaArea!==kind||data.version!==1||!Array.isArray(data.entries)||data.entries.length>20000||!data.entries.every(x=>kxEntry(kind,x)))return false;
+ return new Set(data.entries.map(x=>x.id)).size===data.entries.length&&Number.isSafeInteger(data.entries.reduce((n,x)=>n+x.amount,0));
+}
+function kxTotals(kind,entries,month){
+ const cfg=KX_CONFIG[kind],rows=entries.filter(x=>!month||x.date.slice(0,7)===month);
+ const total=types=>rows.filter(x=>types.includes(x.type)).reduce((n,x)=>n+x.amount,0);
+ return {incoming:total(cfg.incoming),outgoing:total(cfg.outgoing),withdrawals:total(['withdrawal']),balance:total(cfg.incoming)-total(cfg.outgoing)};
+}
+async function kxEnter(kind){
+ if(!Object.hasOwn(KX_CONFIG,kind)||!user||!user.id)return toast('Área indisponível.');
+ const epoch=SESSION_EPOCH,seq=++ENTER_SEQ;const current=()=>epoch===SESSION_EPOCH&&seq===ENTER_SEQ;
+ try{
+  const subs=await sb.from('subscriptions').select('*');if(!current())return;
+  if(subs.error){resetAccess();throw Error('Não foi possível validar a subscrição.')}
+  SUBS=subs.data||[];entCalc();if(!ENT[kind]){toast('Esta área exige uma subscrição válida do respetivo plano.');return payOpen()}
+  if(!SERVER_IMPLEMENTED.includes(kind))throw Error('Aplica primeiro a atualização desta área no Supabase.');
+  if(!WS[kind]){const id=uid();const created=await sb.from('workspaces').insert({id,kind,name:KX_CONFIG[kind].title});if(!current())return;if(created.error)throw created.error;WS[kind]=id}
+  const ws=WS[kind];
+  const result=await sb.from('app_state').select('data').eq('workspace_id',ws).maybeSingle();if(!current())return;if(result.error)throw result.error;
+  const member=await sb.from('workspace_members').select('role').eq('workspace_id',ws).eq('user_id',user.id).maybeSingle();if(!current())return;if(member.error)throw member.error;
+  let data=result.data&&result.data.data;
+  if(!data||Object.keys(data).length===0)data={_kambaArea:kind,version:1,entries:[]};
+  if(!kxDocument(kind,data))throw Error('Os dados desta área têm um formato diferente. Nada foi substituído.');
+  const role=member.data&&member.data.role;
+  if(!['admin','member','viewer'].includes(role))throw Error('Não foi possível confirmar o teu papel neste espaço.');
+  mode=null;KX_STATE={kind,ws,epoch,owner:user.id,data,role,busy:false,month:kxToday().slice(0,7),edit:null};kxRender();
+ }catch(e){if(current())toast(e.message||'Não foi possível abrir esta área.')}
+}
+async function kxPersist(ctx,data){
+ if(ctx!==KX_STATE||ctx.epoch!==SESSION_EPOCH||!user||ctx.owner!==user.id)return false;
+ if(ctx.busy)return false;
+ if(!['admin','member'].includes(ctx.role)){toast('O teu acesso é apenas de consulta.');return false}
+ if(!kxDocument(ctx.kind,data)){toast('Confirma os dados antes de guardar.');return false}
+ ctx.busy=true;kxBusy();
+ try{
+  const r=await sb.from('subscriptions').select('*');
+  if(ctx!==KX_STATE||ctx.epoch!==SESSION_EPOCH)return false;
+  if(r.error){resetAccess();throw Error('Não foi possível validar a subscrição.')}
+  SUBS=r.data||[];entCalc();if(!ENT[ctx.kind])throw Error('Subscrição inativa. Renova antes de guardar.');
+  const saved=await sb.from('app_state').upsert({workspace_id:ctx.ws,data,updated_at:new Date().toISOString()});
+  if(saved.error)throw saved.error;
+  if(ctx!==KX_STATE||ctx.epoch!==SESSION_EPOCH)return false;
+  ctx.data=data;return true;
+ }catch(e){if(ctx===KX_STATE)toast(e.message||'Não foi possível guardar. Mantém o formulário aberto e tenta novamente.');return false}
+ finally{ctx.busy=false;if(ctx===KX_STATE)kxBusy()}
+}
+function kxBusy(){document.querySelectorAll('[data-kx-write]').forEach(el=>el.disabled=!!(KX_STATE&&KX_STATE.busy))}
+function kxRender(){
+ const ctx=KX_STATE;if(!ctx)return;const cfg=KX_CONFIG[ctx.kind],write=['admin','member'].includes(ctx.role),totals=kxTotals(ctx.kind,ctx.data.entries,ctx.month);
+ const selected=ctx.edit&&ctx.data.entries.find(x=>x.id===ctx.edit);
+ const rows=ctx.data.entries.filter(x=>x.date.slice(0,7)===ctx.month).slice().sort((a,b)=>b.date.localeCompare(a.date));
+ A.innerHTML=`<div class="kx-area ${ctx.kind==='senior'?'kx-senior':''}"><header><div class="brand"><div class="logo">₭</div><div><h1>${esc(cfg.title)}</h1><p>Registos individuais</p></div></div><div class="hb"><button class="secondary" data-kx="back">Trocar área</button><button class="secondary" data-a="plano">Plano e pagamentos</button><button class="secondary" data-kx="export">Exportar cópia</button><button class="danger" data-a="out">Sair</button></div></header><main>
+ <div class="topline"><h2>O meu dinheiro</h2><div class="field"><label for="kx-month">Consultar mês</label><input id="kx-month" type="month" value="${esc(ctx.month)}"></div></div>
+ <div class="cards"><section class="panel"><h3>Entradas no mês</h3><strong>${money(totals.incoming)}</strong></section><section class="panel"><h3>Saídas no mês</h3><strong>${money(totals.outgoing)}</strong></section><section class="panel"><h3>Saldo dos registos do mês</h3><strong>${money(totals.balance)}</strong></section></div>
+ ${ctx.kind==='raiz'?`<p class="note">Regista apenas valores já recebidos ou pagos. As retiradas pessoais deste mês somam ${money(totals.withdrawals)} e já estão incluídas nas saídas. O saldo não é o lucro nem o saldo bancário.</p>`:'<p class="note">Consulta o dinheiro que entrou e saiu. O saldo corresponde apenas aos registos deste mês.</p>'}
+ ${write?`<section class="panel"><h2>${selected?'Alterar registo':'Registar dinheiro'}</h2><form id="kx-form"><div class="fg"><div class="field w"><label for="kx-type">O que aconteceu?</label><select id="kx-type">${Object.entries(cfg.types).map(([v,n])=>`<option value="${v}" ${selected&&selected.type===v?'selected':''}>${esc(n)}</option>`).join('')}</select></div><div class="field w"><label for="kx-desc">Descrição</label><input id="kx-desc" maxlength="80" required value="${esc(selected?selected.desc:'')}" placeholder="${ctx.kind==='senior'?'Ex.: Pensão, alimentação':'Ex.: Venda do dia, compra de mercadoria'}"></div><div class="field"><label for="kx-amount">Valor em Kz</label><input id="kx-amount" type="number" inputmode="numeric" min="1" max="1000000000000" step="1" required value="${selected?selected.amount:''}"></div><div class="field"><label for="kx-date">Data</label><input id="kx-date" type="date" required value="${selected?selected.date:kxToday()}"></div></div><div class="row2"><button class="primary" data-kx-write>${selected?'Guardar alteração':'Guardar registo'}</button>${selected?'<button type="button" class="secondary" data-kx="cancel">Cancelar alteração</button>':''}</div><p class="mu" role="status" id="kx-status" aria-live="polite"></p></form></section>`:'<p class="note">Tens acesso de consulta. Só os membros autorizados podem registar alterações.</p>'}
+ <section class="panel" style="margin-top:20px"><h2>Registos do mês (${rows.length})</h2>${rows.length?rows.map(x=>`<div class="tx"><div class="tb"><strong>${esc(x.desc)}</strong><small>${esc(cfg.types[x.type])} · ${esc(fd(x.date))}</small></div><div class="ta"><strong>${cfg.incoming.includes(x.type)?'+':'−'} ${money(x.amount)}</strong>${write?`<div><button class="secondary small" data-kx="edit" data-id="${esc(x.id)}" data-kx-write>Alterar</button><button class="danger small" data-kx="delete" data-id="${esc(x.id)}" data-kx-write>Eliminar</button></div>`:''}</div></div>`).join(''):'<p class="empty">Ainda não há registos neste mês.</p>'}</section></main><footer>Os registos são de organização financeira. Exporta cópias regularmente.</footer></div>`;
+ kxBusy();
+}
+async function kxSubmit(form){
+ const ctx=KX_STATE;if(!ctx||ctx.busy)return;if(!form.checkValidity()){form.reportValidity();return}
+ const entry={id:ctx.edit||uid(),type:$('#kx-type').value,desc:$('#kx-desc').value.trim(),amount:Number($('#kx-amount').value),date:$('#kx-date').value};
+ if(!kxEntry(ctx.kind,entry))return toast('Confirma a descrição, o valor inteiro e a data.');
+ const data=JSON.parse(JSON.stringify(ctx.data));
+ if(ctx.edit){const idx=data.entries.findIndex(x=>x.id===ctx.edit);if(idx<0)return toast('Registo não encontrado.');data.entries[idx]=entry}else data.entries.push(entry);
+ if(await kxPersist(ctx,data)){ctx.month=entry.date.slice(0,7);ctx.edit=null;kxRender();toast('Registo guardado.')}
+}
+function kxExport(){
+ const ctx=KX_STATE;if(!ctx)return;
+ const payload={app:'Kamba Gestão',version:1,area:ctx.kind,exportedAt:new Date().toISOString(),data:ctx.data};
+ const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
+ const link=document.createElement('a');link.href=url;link.download=`kamba-${ctx.kind}-${kxToday()}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+document.addEventListener('submit',e=>{if(e.target.id!=='kx-form')return;e.preventDefault();kxSubmit(e.target)});
+document.addEventListener('change',e=>{if(e.target.id==='kx-month'&&KX_STATE&&/^\d{4}-\d{2}$/.test(e.target.value)){KX_STATE.month=e.target.value;KX_STATE.edit=null;kxRender()}});
+document.addEventListener('click',async e=>{
+ const button=e.target.closest('[data-kx]');if(!button)return;const action=button.dataset.kx,ctx=KX_STATE;if(!ctx)return;
+ if(action==='back'){if(ctx.busy)return toast('Aguarda que o registo termine.');KX_STATE=null;return gate()}
+ if(action==='export')return kxExport();
+ if(ctx.busy)return;
+ if(action==='cancel'){ctx.edit=null;return kxRender()}
+ if(action==='edit'){ctx.edit=button.dataset.id;kxRender();$('#kx-desc').focus();return}
+ if(action==='delete'){
+  const record=ctx.data.entries.find(x=>x.id===button.dataset.id);if(!record||!confirm('Eliminar este registo?'))return;
+  const data=JSON.parse(JSON.stringify(ctx.data));data.entries=data.entries.filter(x=>x.id!==record.id);
+  if(await kxPersist(ctx,data)){ctx.edit=null;kxRender();toast('Registo eliminado.')}
+ }
+});
+
+</script>
+<script>
+/* Casais / Intergeracional: registos por linha, visibilidade privada por defeito.
+   O servidor, não as variáveis locais, verifica todos os acessos e revisões. */
+let KS_STATE=null;
+const KS_TITLES={couples:'Kamba Casais',intergenerational:'Meu Kamba Intergeracional'};
+const KS_TYPES={income:'Receita recebida',expense:'Despesa paga',budget:'Orçamento mensal',goal:'Objetivo de poupança',contribution:'Contribuição para objetivo',reminder:'Lembrete',gift:'Presente planeado'};
+function ksMoney(value){return new Intl.NumberFormat('pt-PT').format(value)+' Kz'}
+function ksCanEdit(record,uid,role){return record.visibility==='private'?record.author_id===uid:role!=='viewer'&&(record.author_id===uid||role==='owner')}
+function ksValid(kind,visibility,data){
+ return Object.hasOwn(KS_TYPES,kind)&&['private','shared'].includes(visibility)&&data&&typeof data.desc==='string'&&data.desc.trim().length>0&&data.desc.length<=80&&kxDate(data.date)&&Number.isSafeInteger(data.amount)&&data.amount>=0&&data.amount<=1000000000000&&(kind==='reminder'||data.amount>0)&&typeof data.category==='string'&&data.category.length<=60&&(kind!=='budget'||data.category.trim().length>0)&&typeof data.done==='boolean'&&(kind!=='contribution'||typeof data.goal_id==='string'&&/^[0-9a-f-]{36}$/i.test(data.goal_id));
+}
+function ksSummary(rows,month,scope){
+ const selected=rows.filter(x=>x.visibility===scope&&x.data.date.slice(0,7)===month);
+ const amount=kind=>selected.filter(x=>x.kind===kind).reduce((n,x)=>n+BigInt(x.data.amount),0n);
+ return {income:amount('income'),expense:amount('expense'),contributed:amount('contribution'),balance:amount('income')-amount('expense')};
+}
+function ksGoalProgress(goal,rows){return rows.filter(x=>x.kind==='contribution'&&x.data.goal_id===goal.id).reduce((n,x)=>n+BigInt(x.data.amount),0n)}
+function ksBudgetSpent(budget,rows){return rows.filter(x=>x.kind==='expense'&&x.visibility===budget.visibility&&(budget.visibility==='shared'||x.author_id===budget.author_id)&&x.data.category===budget.data.category&&x.data.date.slice(0,7)===budget.data.date.slice(0,7)).reduce((n,x)=>n+BigInt(x.data.amount),0n)}
+async function ksCall(name,args){const result=await sb.rpc(name,args);if(result.error)throw Error(result.error.message||'Operação recusada.');return result.data}
+function ksCurrent(ctx){return KS_STATE===ctx&&ctx.epoch===SESSION_EPOCH&&user&&ctx.owner===user.id}
+async function ksEnter(kind){
+ if(!Object.hasOwn(KS_TITLES,kind)||!user)return;
+ ++ENTER_SEQ;mode=null;KX_STATE=null;
+ const ctx={kind,epoch:SESSION_EPOCH,owner:user.id,group:null,groups:[],invites:[],rows:[],people:[],pending:[],busy:false,edit:null,scope:'private',month:kxToday().slice(0,7)};KS_STATE=ctx;
+ try{
+  if(!SERVER_IMPLEMENTED.includes(kind))throw Error('Aplica primeiro a migração 016 no Supabase.');
+  const [groups,invites]=await Promise.all([sb.from('kamba_groups').select('*').eq('kind',kind).order('created_at'),ksCall('kamba_pending_invites',{})]);
+  if(!ksCurrent(ctx))return;if(groups.error)throw groups.error;ctx.groups=groups.data||[];ctx.invites=(invites||[]).filter(x=>x.kind===kind);ksRenderHome();
+ }catch(e){if(ksCurrent(ctx)){KS_STATE=null;gate();toast(e.message||'Não foi possível carregar a área.')}}
+}
+function ksHomeMarkup(ctx){return `<h2>Os meus espaços</h2><p class="note">Os dados privados são visíveis apenas ao autor. Partilha um registo apenas quando quiseres que os participantes aceites o consultem.</p><section class="panel"><form id="ks-create"><label for="ks-title">Nome de um espaço novo</label><input id="ks-title" maxlength="80" required placeholder="Ex.: A nossa organização"><button class="primary" data-ks-write>Criar espaço com o meu plano</button></form><p class="mu">Criar exige o plano da área, Todos os planos ou acesso administrativo de teste. Convites aceites dão acesso apenas ao espaço do titular, enquanto o plano dele estiver válido.</p></section>${ctx.groups.map(g=>`<section class="panel" style="margin-top:12px"><h3>${esc(g.title)}</h3><button class="primary" data-ks="open" data-id="${esc(g.id)}">Abrir</button></section>`).join('')||'<p>Ainda não tens espaços. Podes criar um ou aceitar um convite.</p>'}<h2>Convites recebidos</h2>${ctx.invites.map(i=>`<section class="panel"><strong>${esc(i.title)}</strong><p>De: ${esc(i.inviter_email)} · Acesso: ${i.role==='viewer'?'consulta partilhada':'edição dos próprios registos partilhados'}</p><p class="mu">O titular pode consultar tudo o que marcares como partilhado. Os teus registos privados permanecem privados.</p><button class="primary" data-ks="accept" data-id="${esc(i.id)}" data-ks-write>Aceitar convite</button> <button class="secondary" data-ks="decline" data-id="${esc(i.id)}" data-ks-write>Recusar</button></section>`).join('')||'<p>Sem convites pendentes.</p>'}`}
+function ksShell(body){const ctx=KS_STATE;A.innerHTML=`<div class="ks-area"><header><div class="brand"><div class="logo">₭</div><h1>${esc(KS_TITLES[ctx.kind])}</h1></div><div class="hb"><button class="secondary" data-ks="back">Trocar área</button><button class="secondary" data-ks="home">Os meus espaços</button><button class="secondary" data-a="plano">Planos e pagamentos</button><button class="danger" data-a="out">Sair</button></div></header><main>${body}</main><footer>Os registos privados não são exportados para outros participantes. A revogação impede consultas futuras; não apaga cópias já exportadas.</footer></div>`;ksBusy()}
+function ksRenderHome(){if(KS_STATE)ksShell(ksHomeMarkup(KS_STATE))}
+async function ksOpen(id){
+ const ctx=KS_STATE;if(!ctx||ctx.busy)return;ctx.busy=true;ksBusy();
+ try{
+  const g=await sb.from('kamba_groups').select('*').eq('id',id).maybeSingle();if(!ksCurrent(ctx))return;
+  if(g.error||!g.data||g.data.kind!==ctx.kind)throw Error('Espaço indisponível.');
+  const role=await ksCall('kamba_group_role',{p_group:id});if(!ksCurrent(ctx))return;
+  if(!role)throw Error('O teu acesso a este espaço terminou.');
+  const active=await ksCall('kamba_group_active',{p_group:id});if(!ksCurrent(ctx))return;
+  ctx.group=g.data;ctx.role=role;ctx.active=active;ctx.rows=[];ctx.people=[];ctx.pending=[];
+  if(active){
+   for(let offset=0;;offset+=500){const r=await sb.from('kamba_shared_records').select('*').eq('group_id',id).order('id').range(offset,offset+499);if(!ksCurrent(ctx))return;if(r.error)throw r.error;ctx.rows.push(...r.data||[]);if(!r.data||r.data.length<500)break}
+  }
+  if(role==='owner'){
+   const [people,invites]=await Promise.all([ksCall('kamba_group_people',{p_group:id}),sb.from('kamba_group_invites').select('*').eq('group_id',id).eq('status','pending')]);if(!ksCurrent(ctx))return;if(invites.error)throw invites.error;ctx.people=people||[];ctx.pending=invites.data||[];
+  }
+  ctx.edit=null;ksRenderGroup();
+ }catch(e){if(ksCurrent(ctx)){ctx.group=null;ctx.rows=[];ksRenderHome();toast(e.message||'Não foi possível abrir o espaço.')}}
+ finally{ctx.busy=false;if(ksCurrent(ctx))ksBusy()}
+}
+function ksRowsMarkup(ctx){
+ const filtered=ctx.rows.filter(x=>x.visibility===ctx.scope&&(x.data.date.slice(0,7)===ctx.month||['goal','reminder','gift'].includes(x.kind)));
+ return filtered.map(r=>`<article class="panel ks-record"><h3>${esc(r.data.desc)}</h3><p>${esc(KS_TYPES[r.kind])} · ${esc(fd(r.data.date))} · ${r.visibility==='private'?'Privado':'Partilhado'} · ${r.author_id===user.id?'Meu registo':'Outro participante'}</p><strong>${ksMoney(r.data.amount)}</strong>${r.kind==='goal'?`<p>Contribuições visíveis: ${ksMoney(ksGoalProgress(r,ctx.rows))} / ${ksMoney(r.data.amount)}</p>`:''}${r.kind==='budget'?`<p>Despesas da categoria neste mês e visibilidade: ${ksMoney(ksBudgetSpent(r,ctx.rows))} / ${ksMoney(r.data.amount)}</p>`:''}${['reminder','gift'].includes(r.kind)?`<p>${r.data.done?'Concluído':'Pendente'}${!r.data.done&&r.data.date<kxToday()?' · Data ultrapassada':''}</p>`:''}${ksCanEdit(r,user.id,ctx.role)?`<div><button class="secondary" data-ks="edit" data-id="${esc(r.id)}" data-ks-write>Alterar</button> <button class="danger" data-ks="delete" data-id="${esc(r.id)}" data-ks-write>Eliminar</button></div>`:''}</article>`).join('')||'<p>Sem registos nesta seleção.</p>';
+}
+function ksFormMarkup(ctx){
+ const edit=ctx.edit&&ctx.rows.find(x=>x.id===ctx.edit),d=edit?edit.data:{desc:'',amount:'',date:kxToday(),category:'',done:false};
+ const goals=ctx.rows.filter(x=>x.kind==='goal');
+ return `<section class="panel"><h2>${edit?'Alterar registo':'Novo registo'}</h2><form id="ks-record-form"><div class="fg"><div class="field"><label for="ks-type">Tipo</label><select id="ks-type" ${edit?'disabled':''}>${Object.entries(KS_TYPES).map(([k,n])=>`<option value="${k}" ${edit&&edit.kind===k?'selected':''}>${esc(n)}</option>`).join('')}</select></div><div class="field"><label for="ks-visibility">Quem pode ver?</label><select id="ks-visibility" ${edit&&edit.author_id!==user.id?'disabled':''}><option value="private" ${!edit||edit.visibility==='private'?'selected':''}>Só eu (privado)</option><option value="shared" ${edit&&edit.visibility==='shared'?'selected':''} ${ctx.role==='viewer'?'disabled':''}>Participantes aceites (partilhado)</option></select></div><div class="field w"><label for="ks-desc">Descrição</label><input id="ks-desc" required maxlength="80" value="${esc(d.desc)}"></div><div class="field"><label for="ks-amount">Valor / limite / objetivo (Kz)</label><input id="ks-amount" type="number" required min="0" max="1000000000000" step="1" value="${d.amount}"><small>Zero apenas em lembretes.</small></div><div class="field"><label for="ks-date">Data / prazo</label><input id="ks-date" type="date" required value="${esc(d.date)}"></div><div class="field"><label for="ks-category">Categoria (obrigatória em orçamento)</label><input id="ks-category" maxlength="60" value="${esc(d.category||'')}"></div><div class="field"><label for="ks-goal">Objetivo (só para contribuição)</label><select id="ks-goal"><option value="">Seleciona se for contribuição</option>${goals.map(g=>`<option value="${esc(g.id)}" ${d.goal_id===g.id?'selected':''}>${esc(g.data.desc)} (${g.visibility==='private'?'privado':'partilhado'})</option>`).join('')}</select></div><div class="field"><label for="ks-done">Estado do lembrete/presente</label><select id="ks-done"><option value="false">Pendente</option><option value="true" ${d.done?'selected':''}>Concluído</option></select></div></div><p class="note">Partilhar permite aos participantes aceites ler este registo. Um titular pode alterar registos partilhados; nunca pode consultar os teus registos privados. Presentes e lembretes são planeamento, não despesas pagas.</p><button class="primary" data-ks-write>Guardar</button> ${edit?'<button type="button" class="secondary" data-ks="cancel">Cancelar alteração</button>':''}</form></section>`;
+}
+function ksPeopleMarkup(ctx){return ctx.role==='owner'?`<section class="panel"><h2>Participantes e consentimento</h2><p>Novos convites começam em consulta. A pessoa tem de aceitar na própria conta.</p><form id="ks-invite-form"><div class="fg"><div class="field"><label for="ks-email">E-mail exato da pessoa</label><input id="ks-email" type="email" required maxlength="254"></div><div class="field"><label for="ks-role">Acesso aos registos partilhados</label><select id="ks-role"><option value="viewer">Consulta</option><option value="editor">Criar e alterar os próprios registos</option></select></div></div><button class="primary" data-ks-write ${ctx.active?'':'disabled'}>Guardar convite</button></form><p class="mu">A pessoa deve ter uma conta com esse e-mail. O convite aparece nessa conta; não é enviado e-mail automaticamente.</p>${ctx.people.map(m=>`<p>${esc(m.email)} · ${m.role==='viewer'?'Consulta':'Edição dos próprios registos'} <button class="danger" data-ks="remove" data-id="${esc(m.user_id)}" data-ks-write>Revogar acesso</button></p>`).join('')}${ctx.pending.map(i=>`<p>${esc(i.invited_email)} · Convite ${new Date(i.expires_at)>new Date()?'pendente':'expirado'} <button class="danger" data-ks="revoke" data-id="${esc(i.id)}" data-ks-write>Revogar convite</button></p>`).join('')}</section>`:`<section class="panel"><p>Para sair, exporta primeiro os teus registos. A saída termina as consultas futuras e mantém os registos históricos no espaço, respeitando a privacidade original.</p><button class="danger" data-ks="leave" data-ks-write>Sair deste espaço</button></section>`}
+function ksRenderGroup(){
+ const ctx=KS_STATE;if(!ctx||!ctx.group)return;
+ const total=ksSummary(ctx.rows,ctx.month,ctx.scope);
+ ksShell(`<h2>${esc(ctx.group.title)}</h2><div class="ks-toolbar"><button class="secondary" data-ks="refresh">Atualizar dados</button><button class="secondary" data-ks="export">Exportar registos visíveis</button></div>${ctx.active?`<div class="fg"><div class="field"><label for="ks-scope">Consultar</label><select id="ks-scope"><option value="private" ${ctx.scope==='private'?'selected':''}>Os meus registos privados</option><option value="shared" ${ctx.scope==='shared'?'selected':''}>Registos partilhados</option></select></div><div class="field"><label for="ks-month">Mês</label><input id="ks-month" type="month" value="${esc(ctx.month)}"></div></div><div class="cards"><section class="panel"><h3>Receitas</h3><strong>${ksMoney(total.income)}</strong></section><section class="panel"><h3>Despesas</h3><strong>${ksMoney(total.expense)}</strong></section><section class="panel"><h3>Saldo dos registos</h3><strong>${ksMoney(total.balance)}</strong></section><section class="panel"><h3>Contribuições para objetivos</h3><strong>${ksMoney(total.contributed)}</strong></section></div><p class="mu">Os valores correspondem à seleção e ao mês. Contribuições não são contadas outra vez como despesas. Lembretes aparecem na aplicação; não são notificações automáticas.</p>${ksFormMarkup(ctx)}<h2>Registos</h2>${ksRowsMarkup(ctx)}`:'<p class="note">A subscrição do titular está inativa. Os registos financeiros estão bloqueados. A revogação de participantes continua disponível.</p>'}${ksPeopleMarkup(ctx)}`);
+}
+function ksBusy(){document.querySelectorAll('[data-ks-write]').forEach(x=>{if(KS_STATE&&KS_STATE.busy)x.disabled=true;else x.disabled=!!(x.closest('#ks-invite-form')&&KS_STATE&&KS_STATE.group&&!KS_STATE.active)})}
+async function ksWrite(work,refresh=true){const ctx=KS_STATE;if(!ctx||ctx.busy)return;ctx.busy=true;ksBusy();try{await work();if(!ksCurrent(ctx))return;ctx.busy=false;if(refresh&&ctx.group)await ksOpen(ctx.group.id);else if(refresh)await ksEnter(ctx.kind)}catch(e){if(ksCurrent(ctx))toast(e.message||'Não foi possível guardar.')}finally{ctx.busy=false;if(ksCurrent(ctx))ksBusy()}}
+async function ksSubmitRecord(form){
+ const ctx=KS_STATE;if(!ctx||ctx.busy||!form.checkValidity()){if(form)form.reportValidity();return}
+ const kind=$('#ks-type').value,visibility=$('#ks-visibility').value;
+ const data={desc:$('#ks-desc').value.trim(),amount:Number($('#ks-amount').value),date:$('#ks-date').value,category:$('#ks-category').value.trim(),done:$('#ks-done').value==='true'};
+ if(kind==='contribution')data.goal_id=$('#ks-goal').value;
+ if(!ksValid(kind,visibility,data))return toast('Confirma os valores, a data, a categoria ou o objetivo.');
+ const old=ctx.edit&&ctx.rows.find(x=>x.id===ctx.edit);
+ await ksWrite(()=>ksCall('kamba_save_record',{p_group:ctx.group.id,p_id:old?old.id:null,p_kind:kind,p_visibility:visibility,p_data:data,p_rev:old?old.rev:0}));
+}
+async function ksExport(){const ctx=KS_STATE;if(!ctx||!ctx.group||!ctx.active)return;const payload={app:'Kamba Gestão',area:ctx.kind,group:ctx.group.title,exportedAt:new Date().toISOString(),records:ctx.rows};const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=`kamba-${ctx.kind}-${kxToday()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+document.addEventListener('submit',e=>{
+ if(!e.target.id.startsWith('ks-'))return;e.preventDefault();const ctx=KS_STATE;if(!ctx||!e.target.checkValidity()){e.target.reportValidity();return}
+ if(e.target.id==='ks-record-form')return ksSubmitRecord(e.target);
+ if(e.target.id==='ks-create'){const title=$('#ks-title').value.trim();return ksWrite(()=>ksCall('kamba_create_group',{p_kind:ctx.kind,p_title:title}))}
+ if(e.target.id==='ks-invite-form'){const email=$('#ks-email').value.trim(),role=$('#ks-role').value;return ksWrite(()=>ksCall('kamba_invite',{p_group:ctx.group.id,p_email:email,p_role:role}))}
+});
+document.addEventListener('change',e=>{const ctx=KS_STATE;if(!ctx||ctx.busy)return;if(e.target.id==='ks-scope'){ctx.scope=e.target.value;ctx.edit=null;ksRenderGroup()}if(e.target.id==='ks-month'&&/^\d{4}-\d{2}$/.test(e.target.value)){ctx.month=e.target.value;ctx.edit=null;ksRenderGroup()}});
+document.addEventListener('click',e=>{
+ const b=e.target.closest('[data-ks]'),ctx=KS_STATE;if(!b||!ctx||ctx.busy)return;const action=b.dataset.ks,id=b.dataset.id;
+ if(action==='back'){KS_STATE=null;return gate()}
+ if(action==='home')return ksEnter(ctx.kind);
+ if(action==='open')return ksOpen(id);
+ if(action==='refresh')return ksOpen(ctx.group.id);
+ if(action==='export')return ksExport();
+ if(action==='edit'){ctx.edit=id;ksRenderGroup();$('#ks-desc').focus();return}
+ if(action==='cancel'){ctx.edit=null;return ksRenderGroup()}
+ if(action==='accept'||action==='decline')return ksWrite(()=>ksCall('kamba_accept_invite',{p_invite:id,p_accept:action==='accept'}));
+ if(action==='revoke'&&confirm('Revogar este convite?'))return ksWrite(()=>ksCall('kamba_revoke_invite',{p_invite:id}));
+ if(action==='remove'&&confirm('Revogar o acesso deste participante? Os registos históricos são mantidos.'))return ksWrite(()=>ksCall('kamba_remove_member',{p_group:ctx.group.id,p_user:id}));
+ if(action==='leave'&&confirm('Exportaste os teus registos? Sair termina o teu acesso ao espaço.'))return ksWrite(async()=>{await ksCall('kamba_remove_member',{p_group:ctx.group.id,p_user:user.id});ctx.group=null});
+ if(action==='delete'&&confirm('Eliminar este registo?')){const record=ctx.rows.find(x=>x.id===id);if(record)return ksWrite(()=>ksCall('kamba_delete_record',{p_id:id,p_rev:record.rev}))}
+});
+
+</script>
 <script>
 (()=>{
 const SB_URL="https://cqbvwjtgilnsnnplnbbr.supabase.co",SB_KEY="sb_publishable_IST8t394Xz3XF0pAAP-Xig_c3OPhqWd";
 const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;
 let SYNCING=0,PENDING=false,OFFV=false,DEFERRED=null,UPDW=null,UPD=false;
-let SESSION_EPOCH=0,ENTER_SEQ=0,SERVER_READY=["personal","business"],SERVER_IMPLEMENTED=[],COMMERCE_READY=false,TRANSFER_AVAILABLE=false;
+let SESSION_EPOCH=0,ENTER_SEQ=0,SERVER_READY=["personal","business"],SERVER_IMPLEMENTED=[],COMMERCE_READY=false,TRANSFER_AVAILABLE=false,ADMIN_TEST_ACCESS=false,ALL_PLAN_ACCESS=false;
 let user=null,WS={},SUBS=[],PL={},HAS={personal:false,business:false},ENT={personal:false,business:false};
 const $=s=>document.querySelector(s),A=$("#app");
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -146,7 +358,7 @@ const SAVE_JOBS=new Map();
 function resetAccess(){SUBS=[];for(const k of ["personal","business","senior","raiz","couples","intergenerational"]){ENT[k]=false;HAS[k]=false}}
 function resetSession(){
  SESSION_EPOCH++;ENTER_SEQ++;if(typeof KX_STATE!=="undefined")KX_STATE=null;if(typeof KS_STATE!=="undefined")KS_STATE=null;for(const job of SAVE_JOBS.values())clearTimeout(job.timer);SAVE_JOBS.clear();
- PENDING=false;mode=null;S=null;WS={};PL={};SERVER_READY=["personal","business"];SERVER_IMPLEMENTED=[];COMMERCE_READY=false;TRANSFER_AVAILABLE=false;resetAccess();
+ PENDING=false;mode=null;S=null;WS={};PL={};SERVER_READY=["personal","business"];SERVER_IMPLEMENTED=[];COMMERCE_READY=false;TRANSFER_AVAILABLE=false;ADMIN_TEST_ACCESS=false;ALL_PLAN_ACCESS=false;resetAccess();
  for(const id of ["md","tv"]){const el=$("#"+id);if(el){el.hidden=true;el.innerHTML=""}}
 }
 const save=()=>{
@@ -171,7 +383,7 @@ const save=()=>{
 const th=rd("kamba_v2_theme");if(th)document.documentElement.dataset.theme=th;
 
 const price=c=>{const p=PL[c];return p&&Number.isSafeInteger(Number(p.price))&&Number(p.price)>0?money(Number(p.price))+(p.period_months===12?" por ano":" / "+p.period_months+" meses"):"Preço indisponível"};
-const PLN=c=>(PL[c]&&PL[c].name)||((PLAN_CATALOG[c]&&PLAN_CATALOG[c].name)||c);
+const PLN=c=>(c==="combo"?"Todos os planos":null)||(PL[c]&&PL[c].name)||((PLAN_CATALOG[c]&&PLAN_CATALOG[c].name)||c);
 // Catálogo comercial: os planos adicionais só ficam disponíveis para compra após a migração segura do servidor.
 const PLAN_CATALOG={
  personal:{name:"Kamba Particular + Familiar",features:["Receitas e despesas pessoais e familiares","Orçamento, metas e gráficos","Associação de movimentos a familiares"],ready:true},
@@ -180,7 +392,7 @@ const PLAN_CATALOG={
  raiz:{name:"Meu Kamba Raiz",features:["Vendas recebidas e outras receitas","Despesas pagas, compras pagas e retiradas","Registo de rendimentos variáveis e resumo mensal"],ready:true},
  intergenerational:{name:"Meu Kamba Intergeracional",features:["Acompanhamento por convite e aceitação","Acesso de consulta ou edição dos próprios registos","Registos privados, partilhados e revogação de acesso"],ready:true},
  business:{name:"Kamba Empresarial",features:["Vendas, stock e produtos","Despesas, caixa e valores a receber","Documentos internos e exportação"],ready:true},
- combo:{name:"Kamba Particular + Empresarial",features:["Inclui Particular/Família e Empresarial","Dados pessoais e empresariais separados"],ready:true}
+ combo:{name:"Todos os planos",features:["Inclui todas as áreas disponíveis","Dados separados e privacidade mantida"],ready:true}
 };
 const planReady=c=>!!(PLAN_CATALOG[c]&&PLAN_CATALOG[c].ready&&COMMERCE_READY&&SERVER_IMPLEMENTED.includes(c));
 const catalogPrice=price;
@@ -189,7 +401,7 @@ const planSaleStatus=c=>!PL[c]?"Catálogo indisponível":!planReady(c)?"Prepara�
 function gate(){
  ENTER_SEQ++;mode=null;if(typeof KX_STATE!=="undefined")KX_STATE=null;if(typeof KS_STATE!=="undefined")KS_STATE=null;
  const has=m=>!!WS[m];
- A.innerHTML=`<div class="gate"><div class="logo">₭</div><h1>Kamba Gestão</h1><p class="mu">Como vais usar a aplicação?</p><p><span class="net st ok" role="status" aria-live="polite"></span></p><p class="mu" style="margin:8px 0 0">Conta: ${esc(user.email)}</p><div class="gate-actions"><button class="secondary" data-a="profile">👤 Perfil</button><button class="secondary" data-a="inst">📲 Instalar aplicação</button><button class="danger" data-a="out">↪ Sair da conta</button></div>
+ A.innerHTML=`<div class="gate"><div class="logo">₭</div><h1>Kamba Gestão</h1><p class="mu">Como vais usar a aplicação?</p><p><span class="net st ok" role="status" aria-live="polite"></span></p><p class="mu" style="margin:8px 0 0">Conta: ${esc(user.email)}</p>${ADMIN_TEST_ACCESS?'<p class="note">Administrador: acesso a todas as áreas para testar nos teus próprios espaços, sem compra de plano.</p>':""}<div class="gate-actions"><button class="secondary" data-a="profile">👤 Perfil</button><button class="secondary" data-a="inst">📲 Instalar aplicação</button><button class="danger" data-a="out">↪ Sair da conta</button></div>
  <div class="modes">
  <button class="mode" data-a="mode" data-m="personal"><span class="ico" aria-hidden="true">🏠</span><strong>Particular / Família</strong><small>Receitas, despesas, orçamento e metas de poupança do dia a dia.</small><span class="pr">${price("personal")}</span>${HAS.personal?"":"<em>🔒 Requer o plano</em>"}${has("personal")?"<em>Tem dados guardados</em>":""}</button>
  <button class="mode" data-a="mode" data-m="business"><span class="ico" aria-hidden="true">🏪</span><strong>Empresarial</strong><small>Vendas, caixa, stock, contas a receber e resultado estimado.</small><span class="pr">${price("business")}</span>${HAS.business?"":"<em>🔒 Requer o plano</em>"}${has("business")?"<em>Tem dados guardados</em>":""}</button>
@@ -197,7 +409,7 @@ function gate(){
  ${["couples","intergenerational"].map(k=>`<button class="mode" data-a="mode" data-m="${k}"><span class="ico" aria-hidden="true">${k==="couples"?"🤝":"🌳"}</span><strong>${esc(PLN(k))}</strong><small>${k==="couples"?"Organização individual e a dois, com partilha por escolha.":"Acompanhamento financeiro com convite, consentimento e papéis."}</small><span class="pr">${price(k)}</span><em>${SERVER_IMPLEMENTED.includes(k)?"Abrir espaços e convites":"Requer atualização 016 do servidor"}</em></button>`).join("")}
  </div>
  <div class="gate-plan"><button class="primary full plan-cta" data-a="plano">💳 Ver planos, vantagens e pagamentos</button><button class="secondary full" style="margin-top:9px;min-height:44px" data-a="cloudhelp">☁️ Ajuda, privacidade e segurança</button></div>
- <div class="note" style="text-align:left;margin-top:16px"><strong>Estado dos acessos:</strong> Particular/Família e Empresarial mantêm as suas áreas; o Combo inclui apenas essas duas. Mais Velho e Raiz têm áreas individuais próprias e exigem a atualização 014 do servidor. Casais e Intergeracional usam espaços com convites aceites e registos privados/partilhados; exigem a migração 016. Nenhum plano dá acesso automático aos dados de outra pessoa.</div></div>`;
+ <div class="note" style="text-align:left;margin-top:16px"><strong>Estado dos acessos:</strong> Particular/Família e Empresarial mantêm as suas áreas; o pacote Todos os planos inclui todas as áreas após a atualização 022. Mais Velho e Raiz têm áreas individuais próprias e exigem a atualização 014 do servidor. Casais e Intergeracional usam espaços com convites aceites e registos privados/partilhados; exigem a migração 016. Nenhum plano dá acesso automático aos dados de outra pessoa.</div></div>`;
 }
 async function enter(m){
  if(["couples","intergenerational"].includes(m))return ksEnter(m);
@@ -733,6 +945,7 @@ function update(){cards();alerts();charts();insights();list();document.documentE
 
 const num=id=>Number($("#"+id).value),val=id=>$("#"+id).value.trim();
 const bad=m=>{toast(m);return true};
+const safeWhole=(n,min=0)=>Number.isSafeInteger(n)&&n>=min;
 const forms={
  auth(){doAuth("login");return true},
  profile(){profileSave();return true},
@@ -757,15 +970,15 @@ const forms={
  contrib(){const a=Math.round(num("gc"));if(!(a>0))return bad("Introduz um valor maior que zero.");S.goal.saved+=a;(S.goal.hist=S.goal.hist||[]).push({d:ld(new Date()),a});if(S.goal.hist.length>200)S.goal.hist.shift()},
  bud(){const a=Math.round(num("bl"));if(!(a>0))return bad("Introduz um limite maior que zero.");S.bud[$("#bc").value]=a},
  sale(){const d=val("ds"),q=Math.round(num("q")),pr=Math.round(num("pr")),dt=$("#dt").value,pid=$("#sp").value,clientName=val("saleClient"),dueDate=$("#saleDue").value;
-  if(!d||!(q>0)||!(pr>0)||!dt)return bad("Confirma a descrição, quantidade, preço e data.");
-  const total=q*pr;let paid=$("#pd").value===""?total:Math.round(num("pd"));if(!(paid>=0)||paid>total)return bad("O valor recebido não pode ser negativo nem maior que o total.");if(dueDate&&dueDate<dt)return bad("O prazo de pagamento não pode ser anterior à data da venda.");const dup=(S.sales||[]).some(v=>v.date===dt&&Number(v.total)===total&&Number(v.qty)===q&&String(v.desc||"").trim().toLocaleLowerCase("pt")===d.trim().toLocaleLowerCase("pt")&&String(v.clientName||"").trim().toLocaleLowerCase("pt")===clientName.trim().toLocaleLowerCase("pt"));if(dup&&!confirm("Já existe uma venda com descrição, data, quantidade, cliente e total iguais. Queres registar outra venda mesmo assim?"))return bad("Venda não registada para evitar uma possível duplicação.");
-  let cost=0;if(pid){const p=S.prod.find(x=>x.id===pid);if(!p)return bad("Produto não encontrado.");if(p.stock<q)return bad(`Stock insuficiente: só há ${p.stock}.`);p.stock-=q;cost=p.cost*q}
+  if(!d||!safeWhole(q,1)||!safeWhole(pr,1)||!dt)return bad("Confirma a descrição, quantidade, preço e data. Usa números inteiros dentro do intervalo seguro.");
+  const total=q*pr;if(!safeWhole(total,1))return bad("O total da venda ultrapassa o intervalo numérico seguro.");let paid=$("#pd").value===""?total:Math.round(num("pd"));if(!safeWhole(paid)||paid>total)return bad("O valor recebido não pode ser negativo nem maior que o total.");if(dueDate&&dueDate<dt)return bad("O prazo de pagamento não pode ser anterior à data da venda.");const dup=(S.sales||[]).some(v=>v.date===dt&&Number(v.total)===total&&Number(v.qty)===q&&String(v.desc||"").trim().toLocaleLowerCase("pt")===d.trim().toLocaleLowerCase("pt")&&String(v.clientName||"").trim().toLocaleLowerCase("pt")===clientName.trim().toLocaleLowerCase("pt"));if(dup&&!confirm("Já existe uma venda com descrição, data, quantidade, cliente e total iguais. Queres registar outra venda mesmo assim?"))return bad("Venda não registada para evitar uma possível duplicação.");
+  let cost=0;if(pid){const p=S.prod.find(x=>x.id===pid);if(!p)return bad("Produto não encontrado.");if(!safeWhole(p.stock)||!safeWhole(p.cost)||!safeWhole(p.cost*q))return bad("O produto tem stock ou custo fora do intervalo seguro. Verifica o registo antes da venda.");if(p.stock<q)return bad(`Stock insuficiente: só há ${p.stock}.`);p.stock-=q;cost=p.cost*q}
   S.sales.push({id:uid(),date:dt,desc:d,pid,qty:q,total,paid,cost,clientName,dueDate:dueDate||"",payments:paid>0?[{date:dt,amount:paid}]:[]});if(clientName){S.customers=S.customers||[];if(!S.customers.some(c=>c.name.toLocaleLowerCase("pt")===clientName.toLocaleLowerCase("pt")))S.customers.push({id:uid(),name:clientName,contact:"",email:"",notes:""})}setMonth(dt);body()},
  bexp(){const d=val("ds"),a=Math.round(num("am")),dt=$("#dt").value;if(!d||!(a>0)||!dt)return bad("Confirma a descrição, o valor e a data.");
   const o={date:dt,desc:d,cat:$("#ct").value,amt:a};if(ed&&ed.k==="exp"){const x=S.exp.find(y=>y.id===ed.id);if(x)Object.assign(x,o,{upd:new Date().toISOString()});ed=null}else S.exp.push({id:uid(),...o});setMonth(dt)},
  prod(){const n=val("pn"),c=Math.round(num("pc")),p=Math.round(num("pp")),s=Math.round(num("ps")),m=Math.round(num("pm")),expiry=$("#pexp")?$("#pexp").value:"";
-  if(!n||!(c>=0)||!(p>0)||!(s>=0)||!(m>=0))return bad("Confirma o nome, custo, preço e stock.");const o={name:n,cost:c,price:p,min:m,expiry:/^\d{4}-\d{2}-\d{2}$/.test(expiry)?expiry:""};if(ed&&ed.k==="prod"){const x=S.prod.find(y=>y.id===ed.id);if(!x)return bad("Produto não encontrado.");Object.assign(x,o);ed=null;const b=$("[data-a=prodCancel]");if(b)b.hidden=true}else S.prod.push({id:uid(),...o,stock:s})},
- purchase(){const pid=$("#purp").value,p=S.prod.find(x=>x.id===pid),supplier=val("purs"),qty=Math.round(num("purq")),unitCost=Math.round(num("purc")),date=$("#dt").value;if(!p||!supplier||!(qty>0)||!(unitCost>=0)||!date)return bad("Confirma o produto, fornecedor, quantidade, custo e data.");const total=qty*unitCost,raw=$("#purpaid").value,paid=raw===""?0:Math.round(Number(raw));if(!(paid>=0)||paid>total)return bad("O valor pago deve estar entre zero e o total da compra.");p.stock+=qty;p.cost=unitCost;S.purchases=S.purchases||[];S.purchases.push({id:uid(),pid,productName:p.name,supplier,qty,unitCost,total,paid,date});setMonth(date)},
+  if(!n||!safeWhole(c)||!safeWhole(p,1)||!safeWhole(s)||!safeWhole(m))return bad("Confirma o nome, custo, preço e stock.");const o={name:n,cost:c,price:p,min:m,expiry:/^\d{4}-\d{2}-\d{2}$/.test(expiry)?expiry:""};if(ed&&ed.k==="prod"){const x=S.prod.find(y=>y.id===ed.id);if(!x)return bad("Produto não encontrado.");Object.assign(x,o);ed=null;const b=$("[data-a=prodCancel]");if(b)b.hidden=true}else S.prod.push({id:uid(),...o,stock:s})},
+ purchase(){const pid=$("#purp").value,p=S.prod.find(x=>x.id===pid),supplier=val("purs"),qty=Math.round(num("purq")),unitCost=Math.round(num("purc")),date=$("#dt").value;if(!p||!supplier||!safeWhole(qty,1)||!safeWhole(unitCost)||!date)return bad("Confirma o produto, fornecedor, quantidade, custo e data.");if(!safeWhole(p.stock)||!safeWhole(p.stock+qty)||!safeWhole(qty*unitCost))return bad("A compra ultrapassa o intervalo seguro do stock ou do total. Nada foi alterado.");const total=qty*unitCost,raw=$("#purpaid").value,paid=raw===""?0:Math.round(Number(raw));if(!safeWhole(paid)||paid>total)return bad("O valor pago deve estar entre zero e o total da compra.");p.stock+=qty;p.cost=unitCost;S.purchases=S.purchases||[];S.purchases.push({id:uid(),pid,productName:p.name,supplier,qty,unitCost,total,paid,date});setMonth(date)},
  supplier(){const name=val("sun"),contact=val("suc"),email=val("sue"),notes=val("suo");if(!name)return bad("Indica o nome do fornecedor.");if((S.suppliers||[]).some(x=>x.name.toLocaleLowerCase("pt")===name.toLocaleLowerCase("pt")&&(!ed||ed.k!=="supplier"||x.id!==ed.id)))return bad("Já existe um fornecedor com esse nome.");S.suppliers=S.suppliers||[];const o={name,contact,email,notes};if(ed&&ed.k==="supplier"){const x=S.suppliers.find(y=>y.id===ed.id);if(!x)return bad("Fornecedor não encontrado.");const old=x.name;Object.assign(x,o);if(old!==name)(S.purchases||[]).filter(p=>p.supplier===old).forEach(p=>p.supplier=name);ed=null}else S.suppliers.push({id:uid(),...o})},
  customer(){const name=val("cun"),contact=val("cuc"),email=val("cue"),notes=val("cuo");if(!name)return bad("Indica o nome do cliente.");if((S.customers||[]).some(x=>x.name.toLocaleLowerCase("pt")===name.toLocaleLowerCase("pt")&&(!ed||ed.k!=="customer"||x.id!==ed.id)))return bad("Já existe um cliente com esse nome.");S.customers=S.customers||[];const o={name,contact,email,notes};if(ed&&ed.k==="customer"){const x=S.customers.find(y=>y.id===ed.id);if(!x)return bad("Cliente não encontrado.");const old=x.name;Object.assign(x,o);if(old!==name)(S.sales||[]).filter(v=>v.clientName===old).forEach(v=>v.clientName=name);ed=null}else S.customers.push({id:uid(),...o})}
 };
@@ -901,9 +1114,9 @@ document.addEventListener("click",e=>{
  if(a==="undemo"){if(mode==="personal")S.tx=S.tx.filter(t=>!t.demo);else{S.prod=S.prod.filter(p=>!p.demo);S.sales=S.sales.filter(s=>!s.demo);S.exp=S.exp.filter(x=>!x.demo);S.purchases=(S.purchases||[]).filter(x=>!x.demo);body()}save();return update(),toast("Exemplos removidos.")}
  if(a==="clr"){if(!confirm("Isto apagará todos os dados deste modo neste navegador. Continuar?"))return;S=def(mode);save();body();return update(),toast("Dados apagados.")}
  if(a==="delbud"){delete S.bud[id];save();return update()}
- if(a==="pay"){const s=S.sales.find(x=>x.id===id);if(!s)return;const due=Math.max(0,s.total-s.paid),raw=prompt("Valor recebido agora (em falta "+money(due)+"):");if(raw===null)return;const v=Math.round(Number(raw));if(!(v>0)||v>due)return toast("Valor inválido: indica um montante maior que zero e até ao valor em falta.");s.paid+=v;s.payments=Array.isArray(s.payments)?s.payments:[];s.payments.push({date:ld(new Date()),amount:v});save();body();update();return toast(s.paid>=s.total?"Venda totalmente paga.":"Recebimento parcial registado.")}
- if(a==="stock"){const p=S.prod.find(x=>x.id===id),n=Math.round(Number(prompt("Quantas unidades entraram em stock?")));if(p&&n>0){p.stock+=n;save();body();update();toast("Stock atualizado.")}return}
- if(a==="purchasePay"){const x=(S.purchases||[]).find(y=>y.id===id);if(!x)return;const due=Math.max(0,x.total-x.paid),v=Math.round(Number(prompt("Valor a pagar ao fornecedor (em falta "+money(due)+"):")));if(!(v>0)||v>due)return toast("Valor inválido: indica um montante maior que zero e até ao saldo em dívida.");x.paid+=v;save();body();update();return toast("Pagamento ao fornecedor registado.")}
+ if(a==="pay"){const s=S.sales.find(x=>x.id===id);if(!s)return;const due=Math.max(0,s.total-s.paid),raw=prompt("Valor recebido agora (em falta "+money(due)+"):");if(raw===null)return;const v=Math.round(Number(raw));if(!safeWhole(v,1)||!safeWhole(due)||v>due)return toast("Valor inválido: indica um montante maior que zero e até ao valor em falta.");s.paid+=v;s.payments=Array.isArray(s.payments)?s.payments:[];s.payments.push({date:ld(new Date()),amount:v});save();body();update();return toast(s.paid>=s.total?"Venda totalmente paga.":"Recebimento parcial registado.")}
+ if(a==="stock"){const p=S.prod.find(x=>x.id===id),n=Math.round(Number(prompt("Quantas unidades entraram em stock?")));if(p&&n>0){if(!safeWhole(n,1)||!safeWhole(p.stock)||!safeWhole(p.stock+n))return toast("Quantidade fora do intervalo seguro. O stock não foi alterado.");p.stock+=n;save();body();update();toast("Stock atualizado.")}return}
+ if(a==="purchasePay"){const x=(S.purchases||[]).find(y=>y.id===id);if(!x)return;const due=Math.max(0,x.total-x.paid),v=Math.round(Number(prompt("Valor a pagar ao fornecedor (em falta "+money(due)+"):")));if(!safeWhole(v,1)||!safeWhole(due)||v>due)return toast("Valor inválido: indica um montante maior que zero e até ao saldo em dívida.");x.paid+=v;save();body();update();return toast("Pagamento ao fornecedor registado.")}
  if(a==="supplierEdit"){const x=(S.suppliers||[]).find(y=>y.id===id);if(!x)return;tab="suppliers";ed={k:"supplier",id};body();$("#sun").value=x.name;$("#suc").value=x.contact||"";$("#sue").value=x.email||"";$("#suo").value=x.notes||"";const f=$("#body form[data-f=supplier]");if(f){f.querySelector(".primary").textContent="Guardar alterações";const c=f.querySelector("[data-a=supplierCancel]");if(c)c.hidden=false}$("#sun").scrollIntoView({behavior:"smooth",block:"center"});return}
  if(a==="supplierCancel"){ed=null;body();return}
  if(a==="supplierDelete"){const x=(S.suppliers||[]).find(y=>y.id===id);if(!x)return;if((S.purchases||[]).some(p=>p.supplier===x.name))return toast("Este fornecedor tem compras associadas. Mantém o registo para preservar o histórico.");if(!confirm("Apagar este fornecedor?"))return;S.suppliers=S.suppliers.filter(y=>y.id!==id);save();body();update();return toast("Fornecedor apagado.")}
@@ -916,9 +1129,9 @@ document.addEventListener("click",e=>{
   if(k==="tx")S.tx=S.tx.filter(x=>x.id!==id);
   if(k==="exp")S.exp=S.exp.filter(x=>x.id!==id);
   if(k==="doc"){const d=S.docs.find(x=>x.id===id);if(!d||d.status!=="draft")return toast("Só rascunhos podem ser apagados.");S.docs=S.docs.filter(x=>x.id!==id)}
-  if(k==="prod"){S.prod=S.prod.filter(x=>x.id!==id);S.purchases=(S.purchases||[]).filter(x=>x.pid!==id);body()}
-  if(k==="purchase"){const pu=(S.purchases||[]).find(x=>x.id===id);if(pu){const p=S.prod.find(x=>x.id===pu.pid);if(p&&p.stock<pu.qty)return toast("Não é seguro apagar esta compra: parte do stock pode já ter sido vendido. Mantém o histórico e corrige o registo manualmente se necessário.");if(p)p.stock-=pu.qty;S.purchases=S.purchases.filter(x=>x.id!==id);body()}}
-  if(k==="sale"){const s=S.sales.find(x=>x.id===id),p=s&&S.prod.find(x=>x.id===s.pid);if(p)p.stock+=s.qty;S.sales=S.sales.filter(x=>x.id!==id);body()}
+  if(k==="prod"){if((S.sales||[]).some(x=>x.pid===id)||(S.purchases||[]).some(x=>x.pid===id))return toast("Este produto tem vendas ou compras associadas. Mantém o produto para preservar o histórico financeiro.");S.prod=S.prod.filter(x=>x.id!==id);body()}
+  if(k==="purchase"){const pu=(S.purchases||[]).find(x=>x.id===id);if(pu){const p=S.prod.find(x=>x.id===pu.pid);if(p&&(!safeWhole(p.stock)||!safeWhole(pu.qty,1)||p.stock<pu.qty))return toast("Não é seguro apagar esta compra: parte do stock pode já ter sido vendido. Mantém o histórico e corrige o registo manualmente se necessário.");if(p)p.stock-=pu.qty;S.purchases=S.purchases.filter(x=>x.id!==id);body()}}
+  if(k==="sale"){const s=S.sales.find(x=>x.id===id),p=s&&S.prod.find(x=>x.id===s.pid);if(p){if(!safeWhole(p.stock)||!safeWhole(s.qty,1)||!safeWhole(p.stock+s.qty))return toast("Não é seguro repor este stock. Verifica o produto e a venda.");p.stock+=s.qty}S.sales=S.sales.filter(x=>x.id!==id);body()}
   save();update();toast("Registo apagado.")}
 });
 function authView(msg){A.innerHTML=`<div class="gate"><div class="logo">₭</div><h1>Kamba Gestão</h1><p class="mu">Entra ou cria a tua conta</p>
@@ -934,12 +1147,12 @@ async function loadPlans(){
  const epoch=SESSION_EPOCH;
  try{
   const r=await sb.from("plans").select("*");if(epoch!==SESSION_EPOCH)return {error:true};
-  PL={};SERVER_READY=[];SERVER_IMPLEMENTED=[];COMMERCE_READY=false;TRANSFER_AVAILABLE=false;
+  PL={};SERVER_READY=[];SERVER_IMPLEMENTED=[];COMMERCE_READY=false;TRANSFER_AVAILABLE=false;ADMIN_TEST_ACCESS=false;ALL_PLAN_ACCESS=false;
   if(r.error)return r;
   (r.data||[]).forEach(p=>PL[p.code]=p);
   try{const status=await sb.rpc("kamba_commerce_status");if(epoch!==SESSION_EPOCH)return {error:true};
    if(!status.error&&status.data&&status.data.version===19&&Array.isArray(status.data.implemented)){
-    SERVER_IMPLEMENTED=status.data.implemented.filter(x=>Object.hasOwn(PLAN_CATALOG,x));COMMERCE_READY=true;TRANSFER_AVAILABLE=status.data.transfer_available===true;
+    SERVER_IMPLEMENTED=status.data.implemented.filter(x=>Object.hasOwn(PLAN_CATALOG,x));COMMERCE_READY=true;TRANSFER_AVAILABLE=status.data.transfer_available===true;ADMIN_TEST_ACCESS=status.data.access_version===22&&status.data.admin_test_access===true;ALL_PLAN_ACCESS=status.data.access_version===22&&status.data.all_plan_access===true;
     SERVER_READY=SERVER_IMPLEMENTED.filter(x=>PL[x]&&PL[x].active&&Number(PL[x].price)>0&&PL[x].period_months===12);
    }
   }catch(e){if(epoch!==SESSION_EPOCH)return {error:true}}
@@ -962,7 +1175,7 @@ function validSubscription(x,now=new Date()){
 }
 function entCalc(){
  for(const k of ["personal","business","senior","raiz","couples","intergenerational"]){
-  ENT[k]=SUBS.some(x=>(x.plan===k||(x.plan==="combo"&&["personal","business"].includes(k)))&&validSubscription(x));HAS[k]=ENT[k];
+  ENT[k]=(typeof ADMIN_TEST_ACCESS!=="undefined"&&ADMIN_TEST_ACCESS===true)||SUBS.some(x=>(x.plan===k||(x.plan==="combo"&&(["personal","business"].includes(k)||(typeof ALL_PLAN_ACCESS!=="undefined"&&ALL_PLAN_ACCESS===true))))&&validSubscription(x));HAS[k]=ENT[k];
  }
 }
 async function start(session){
@@ -981,7 +1194,7 @@ function cloudHelpOpen(){
  const m=$("#md");m.hidden=false;
  const plan=(code,title,desc,good,limits)=>{const p=PL[code];return `<article class="help-plan"><h4>${title}</h4><p style="margin:4px 0 8px">${esc(desc)}</p><strong>${p&&p.active&&p.price?esc(price(code)):"Preço por confirmar"}</strong><p class="adv"><strong>Vantagens</strong></p><ul>${good.map(x=>`<li>${x}</li>`).join("")}</ul><p class="lim"><strong>Limitações / atenção</strong></p><ul>${limits.map(x=>`<li>${x}</li>`).join("")}</ul></article>`};
  m.innerHTML=`<div class="mbox help-box" role="dialog" aria-modal="true" aria-label="Ajuda, planos e privacidade"><div style="display:flex;align-items:center;gap:12px"><div class="logo" style="background:var(--logo-bg);color:var(--logo-fg)">☁️</div><div><h2 style="margin:0">Ajuda, planos e privacidade</h2><p class="mu" style="margin:4px 0 0">Informação para usares o Kamba Gestão com mais confiança.</p></div></div>
- <h3>Conhece os planos</h3><div class="help-grid">${plan("personal","🏠 Particular / Família","Para organizar o dinheiro pessoal e familiar.",["Registo de receitas e despesas.","Orçamentos e acompanhamento por categoria.","Metas de poupança e resumo de despesas por familiar."],["Não inclui ferramentas empresariais.","Os cálculos são de organização e não substituem aconselhamento financeiro."])}${plan("business","🏪 Empresarial","Para acompanhar a atividade de um negócio.",["Vendas, produtos e stock.","Despesas, caixa e valores a receber.","Documentos de gestão e exportação de dados."],["Não inclui o módulo Particular/Família.","Os documentos atuais são internos e não são faturas fiscais válidas em Angola."])}${plan("combo","🔁 Combo","Para quem precisa dos dois módulos.",["Inclui as funcionalidades dos dois módulos.","Mantém os dados de Particular e Empresarial separados."],["Tem o preço e as condições próprios do Combo.","Cada módulo continua sujeito à disponibilidade e ao estado da subscrição."])}</div>
+ <h3>Conhece os planos</h3><div class="help-grid">${plan("personal","🏠 Particular / Família","Para organizar o dinheiro pessoal e familiar.",["Registo de receitas e despesas.","Orçamentos e acompanhamento por categoria.","Metas de poupança e resumo de despesas por familiar."],["Não inclui ferramentas empresariais.","Os cálculos são de organização e não substituem aconselhamento financeiro."])}${plan("business","🏪 Empresarial","Para acompanhar a atividade de um negócio.",["Vendas, produtos e stock.","Despesas, caixa e valores a receber.","Documentos de gestão e exportação de dados."],["Não inclui o módulo Particular/Família.","Os documentos atuais são internos e não são faturas fiscais válidas em Angola."])}${plan("combo","🔁 Todos os planos","Para quem precisa de todas as áreas.",["Inclui Particular/Família, Empresarial, Mais Velho, Raiz, Casais e Intergeracional.","Mantém os dados de cada área separados."],["Não permite consultar dados privados de outras pessoas.","Requer a atualização 022 no servidor."])}</div>
  <p class="mu">Os preços e a disponibilidade são os que aparecem na página «Plano e pagamentos»; não se presume que uma funcionalidade ou método de pagamento esteja ativo sem indicação na aplicação.</p><button class="primary full plan-cta" data-a="plano">Ver planos e pagamentos</button>
  <h3>Política de privacidade — resumo</h3><ul><li><strong>Dados:</strong> a aplicação pode guardar o teu nome de apresentação, fotografia opcional, movimentos financeiros, categorias, orçamentos, metas, familiares associados a despesas, notas e dados empresariais que introduzires.</li><li><strong>Finalidade:</strong> usar esses dados para mostrar os teus registos, calcular resumos, sincronizar a tua área de trabalho e prestar as funções escolhidas.</li><li><strong>Conta e armazenamento:</strong> os dados de conta e os dados sincronizados são processados através dos serviços ligados à aplicação, incluindo Supabase. O funcionamento e a confidencialidade dependem também das permissões e políticas de segurança configuradas no serviço.</li><li><strong>Pagamentos:</strong> os pedidos de subscrição podem incluir plano, valor, referência, estado e comprovativo. O comprovativo não confirma por si só o pagamento; a confirmação depende da verificação administrativa.</li><li><strong>Não partilhes:</strong> nunca introduzas PIN de banco, palavra-passe bancária, códigos SMS ou códigos de autenticação. A aplicação não precisa desses segredos.</li><li><strong>Dispositivo e terceiros:</strong> a aplicação pode usar ligação à internet e recursos externos necessários ao seu funcionamento. Evita usar dispositivos públicos e termina a sessão quando acabares.</li><li><strong>Retenção e eliminação:</strong> exporta uma cópia dos dados importantes. A eliminação de dados na aplicação, na conta e nos sistemas de pagamento pode seguir procedimentos diferentes; esta versão não promete apagamento automático de todas as cópias de servidor.</li><li><strong>Os teus cuidados:</strong> usa uma palavra-passe exclusiva, mantém o teu e-mail seguro, confirma os valores antes de registar e não deixes o dispositivo desbloqueado.</li></ul>
  <div class="note"><strong>Importante:</strong> este resumo melhora a transparência, mas não substitui uma política jurídica completa nem confirma, por si só, conformidade legal. Antes de disponibilizar comercialmente a aplicação, publica os dados reais do responsável pelo serviço, contacto para questões de privacidade, prazos de retenção, processo de pedidos de acesso/retificação/eliminação e condições contratuais. Não inventámos um contacto ou entidade legal.</div>
@@ -992,8 +1205,8 @@ function instOpen(){const ios=/iphone|ipad|ipod/i.test(navigator.userAgent)||(na
  m.innerHTML=`<div class="mbox" role="dialog" aria-modal="true" aria-label="Instalar a aplicação"><div style="display:flex;gap:12px;align-items:center">${LOGO}<div><h3 style="margin:0">Instalar o Kamba Gestão</h3><div class="mu" style="font-size:13px">${std?"Já está instalada neste dispositivo.":"Abre como uma aplicação, sem o navegador."}</div></div></div>
  ${DEFERRED&&!std?'<button class="primary full" style="margin-top:14px" data-a="instgo">Instalar agora</button>':""}
  <ol><li><strong>Android (Chrome):</strong> menu ⋮ e «Instalar aplicação» ou «Adicionar ao ecrã principal».</li><li><strong>iPhone e iPad (Safari):</strong> botão Partilhar e «Adicionar ao ecrã principal»${ios?" (é o teu caso)":""}.</li><li><strong>Computador (Chrome ou Edge):</strong> ícone de instalar na barra de endereço, ou menu e «Instalar Kamba Gestão».</li></ol>
- <p style="font-size:13px"><strong>Ficheiros da aplicação guardados para abrir sem internet:</strong> ${ctl?"sim":"ainda não (abre a aplicação uma vez com internet e recarrega)"}</p>
- <div class="note" style="margin:0 0 12px"><strong>Limitações:</strong> só abre sem internet depois de ser aberta uma vez com internet. Os teus dados financeiros ainda <strong>não</strong> ficam disponíveis offline: a cache local identifica a conta e o espaço de trabalho, mas não está cifrada. O modo offline completo continua pendente. Pagamentos, recuperação de conta e alterações de segurança exigem sempre internet. O suporte varia com o navegador e o dispositivo (por exemplo, o iPhone pode apagar dados de sites pouco usados).</div>
+ <p style="font-size:13px"><strong>Versão de teste em ficheiro único:</strong> usa a aplicação com internet. Esta página não instala nem atualiza um service worker.</p>
+ <div class="note" style="margin:0 0 12px"><strong>Limitações:</strong> esta versão de teste não garante abertura sem internet. Os teus dados financeiros ainda <strong>não</strong> ficam disponíveis offline: a cache local identifica a conta e o espaço de trabalho, mas não está cifrada. O modo offline completo continua pendente. Pagamentos, recuperação de conta e alterações de segurança exigem sempre internet. O suporte varia com o navegador e o dispositivo (por exemplo, o iPhone pode apagar dados de sites pouco usados).</div>
  <button class="secondary full" data-a="mclose">Fechar</button></div>`}
 function updBanner(w){UPDW=w;if($("#upd"))return;const b=document.createElement("div");b.id="upd";b.setAttribute("role","status");b.innerHTML='Nova versão disponível. <button class="secondary small" data-a="doupd">Atualizar agora</button>';document.body.appendChild(b)}
 async function init(){OFFV=false;
@@ -1007,7 +1220,6 @@ window.addEventListener("offline",()=>{netUI();if(mode)update()});
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();DEFERRED=e});
 window.addEventListener("appinstalled",()=>{DEFERRED=null;toast("Aplicação instalada.")});
 sb&&sb.auth.onAuthStateChange(ev=>{if(ev==="SIGNED_OUT"){resetSession();user=null;authView();return}if(ev==="PASSWORD_RECOVERY")setTimeout(async()=>{const p=prompt("Nova palavra-passe (mínimo 8 caracteres):");if(p&&p.length>=8){const r=await sb.auth.updateUser({password:p});toast(r.error?r.error.message:"Palavra-passe atualizada.")}},300)});
-if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").then(reg=>{reg.addEventListener("updatefound",()=>{const w=reg.installing;if(w)w.addEventListener("statechange",()=>{if(w.state==="installed"&&navigator.serviceWorker.controller)updBanner(w)})})}).catch(()=>{}));navigator.serviceWorker.addEventListener("controllerchange",()=>{if(UPD)location.reload()})}
 init();
 })();
 </script>
