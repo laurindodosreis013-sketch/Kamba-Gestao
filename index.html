@@ -493,8 +493,9 @@ document.addEventListener('change',e=>{if(e.target.id==='du-group-file')duUpload
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-du]'),c=KS_STATE;if(!b||!c||!c.group||c.busy)return;const action=b.dataset.du;if(action==='upload-file')return $('#du-group-file').click();if(!['open-file','hide-file'].includes(action))return;const f=(c.files||[]).find(x=>x.id===b.dataset.id);if(!f)return;if(action==='hide-file'){if(!confirm('Mover este ficheiro para arquivo? Deixará de aparecer nos documentos ativos.'))return;try{await ksCall('kamba_hide_group_file',{p_file:f.id});await duSharedFiles()}catch(e){toast(e.message)}return}const r=await sb.storage.from('kamba-shared-docs').createSignedUrl(f.path,60,{download:f.name});if(!ksCurrent(c))return;if(r.error)return toast('Não foi possível abrir o ficheiro.');const m=$('#md');m.innerHTML=`<div class="mbox"><h2>${esc(f.name)}</h2><a class="primary" href="${esc(r.data.signedUrl)}" target="_blank" rel="noopener">Abrir / descarregar ficheiro</a><p class="mu">A ligação expira em 60 segundos.</p><button class="secondary" data-a="mclose">Fechar</button></div>`});
 
 const SB_URL="https://cqbvwjtgilnsnnplnbbr.supabase.co",SB_KEY="sb_publishable_IST8t394Xz3XF0pAAP-Xig_c3OPhqWd";
+const AUTH_LINK=authLinkState(location.href);
 const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;
-const APP_BUILD="2026.10.19.24";
+const APP_BUILD="2026.10.20.recuperacao1";
 let DIAG_SEQ=0,DIAG_REPORT=null;
 let SYNCING=0,PENDING=false,OFFV=false,DEFERRED=null,UPDW=null,UPD=false;
 let SESSION_EPOCH=0,ENTER_SEQ=0,SERVER_READY=["personal","business"],SERVER_IMPLEMENTED=[],COMMERCE_READY=false,TRANSFER_AVAILABLE=false,ADMIN_TEST_ACCESS=false,ALL_PLAN_ACCESS=false;
@@ -1170,6 +1171,7 @@ const bad=m=>{toast(m);return true};
 const safeWhole=(n,min=0)=>Number.isSafeInteger(n)&&n>=min;
 const forms={
  auth(){doAuth("login");return true},
+ recovery(){completeRecovery();return true},
  profile(){profileSave();return true},
  noteSave(){noteSave();return true},
  mfedit(){return DOCM.mfedit()},
@@ -1322,7 +1324,8 @@ document.addEventListener("click",e=>{
  if(a==="up"||a==="dn"){mv(id,a==="up"?-1:1);save();update();custom();return}
  if(a==="rst"){S.prefs={hide:[],order:[]};save();update();custom();return toast("Painel reposto.")}
  if(a==="signup")return doAuth("signup");
- if(a==="reset"){const em=$("#em").value.trim();if(!em)return toast("Escreve o teu e-mail primeiro.");sb.auth.resetPasswordForEmail(em,{redirectTo:location.href.split("#")[0]});return toast("Se o e-mail existir, enviámos as instruções.")}
+ if(a==="reset")return sendRecovery();
+ if(a==="recovery-back"){if(AUTH_RECOVERY&&AUTH_RECOVERY.busy)return;AUTH_RECOVERY=null;return authView()}
  if(a==="out"){(async()=>{
  const owner=user&&user.id;resetSession();user=null;authView();
  try{Object.keys(localStorage).filter(k=>owner&&k.startsWith("kamba_v3_"+owner+"_")).forEach(k=>localStorage.removeItem(k))}catch(x){}
@@ -1359,7 +1362,7 @@ document.addEventListener("click",e=>{
   save();update();toast("Registo apagado.")}
 });
 function authView(msg){A.innerHTML=`<div class="gate"><div class="logo">₭</div><h1>Kamba Gestão</h1><p class="mu">Entra ou cria a tua conta</p>
-<form data-f="auth" class="panel" style="max-width:380px;margin:22px auto;text-align:left"><div class="field"><label for="em">E-mail</label><input id="em" type="email" autocomplete="email" required></div><div class="field" style="margin-top:12px"><label for="pw">Palavra-passe (mínimo 8 caracteres)</label><input id="pw" type="password" autocomplete="current-password" minlength="8" required></div>
+<div id="authNotice" role="status" aria-live="polite"></div><form data-f="auth" class="panel" style="max-width:380px;margin:22px auto;text-align:left"><div class="field"><label for="em">E-mail</label><input id="em" type="email" autocomplete="email" required></div><div class="field" style="margin-top:12px"><label for="pw">Palavra-passe (mínimo 8 caracteres)</label><input id="pw" type="password" autocomplete="current-password" minlength="8" required></div>
 <div class="field"><label for="signupSex">Sexo (ao criar conta)</label><select id="signupSex"><option value="">Selecionar</option><option value="male">Masculino</option><option value="female">Feminino</option></select></div><div class="row2"><button class="primary" style="flex:1">Entrar</button><button class="secondary" style="flex:1" type="button" data-a="signup">Criar conta</button></div><div class="row2"><button type="button" class="secondary small" data-a="reset">Esqueci a palavra-passe</button></div>${msg?`<div class="al warn" style="margin-top:12px" role="alert">${esc(msg)}</div>`:""}</form><p><span class="net st ok" role="status" aria-live="polite"></span> <button class="secondary small" type="button" data-a="inst">Como instalar a aplicação</button></p></div>`}
 async function doAuth(k){
  const email=$("#em").value.trim(),password=$("#pw").value;if(!email||password.length<8)return authView("Indica um e-mail válido e uma palavra-passe com pelo menos 8 caracteres.");
@@ -1434,17 +1437,54 @@ function instOpen(){const ios=/iphone|ipad|ipod/i.test(navigator.userAgent)||(na
  <div class="note" style="margin:0 0 12px"><strong>Limitações:</strong> esta versão não garante abertura sem internet. Os teus dados financeiros ainda <strong>não</strong> ficam disponíveis offline: a cache local identifica a conta e o espaço de trabalho, mas não está cifrada. O modo offline completo continua pendente. Pagamentos, recuperação de conta e alterações de segurança exigem sempre internet. O suporte varia com o navegador e o dispositivo (por exemplo, o iPhone pode apagar dados de sites pouco usados).</div>
  <button class="secondary full" data-a="mclose">Fechar</button></div>`}
 function updBanner(w){UPDW=w;if($("#upd"))return;const b=document.createElement("div");b.id="upd";b.setAttribute("role","status");b.innerHTML='Nova versão disponível. <button class="secondary small" data-a="doupd">Atualizar agora</button>';document.body.appendChild(b)}
+function authLinkState(href){
+ try{const url=new URL(href),fragment=new URLSearchParams(url.hash.slice(1));return {recovery:fragment.get('type')==='recovery',error:fragment.get('error_code')||url.searchParams.get('error_code')||fragment.get('error')||url.searchParams.get('error')||''}}catch(e){return{recovery:false,error:''}}
+}
+let AUTH_RECOVERY=null,AUTH_RESET_JOB=null;
+function authReturnUrl(){const url=new URL(location.href);return url.origin+url.pathname}
+function authNotice(message){const el=$('#authNotice');if(el){el.textContent=message;el.setAttribute('role','status')}else toast(message)}
+async function sendRecovery(){
+ if(!sb)return authNotice('Sem ligação ao serviço de contas. Recarrega a página com internet.');
+ const em=$('#em'),email=em?em.value.trim():'';if(!email||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return authNotice('Escreve o e-mail da tua conta existente.');
+ const epoch=SESSION_EPOCH;if(AUTH_RESET_JOB&&AUTH_RESET_JOB.epoch===epoch)return;
+ const job={epoch},button=document.querySelector('[data-a="reset"]');AUTH_RESET_JOB=job;if(button)button.disabled=true;authNotice('A pedir o e-mail de recuperação...');
+ try{const r=await sb.auth.resetPasswordForEmail(email,{redirectTo:authReturnUrl()});if(epoch!==SESSION_EPOCH)return;
+  if(r.error){const code=r.error.code||'';return authNotice(/rate|limit/i.test(code)||r.error.status===429?'Foram feitos demasiados pedidos. Aguarda antes de tentar novamente.':'Não foi possível pedir a recuperação. Verifica a ligação e a configuração de e-mail/redirecionamento do serviço.');}
+  authNotice('Pedido aceite. Se existir uma conta com este e-mail, receberás instruções. Abre apenas o e-mail mais recente. Não precisas de criar outra conta.');
+ }catch(e){if(epoch===SESSION_EPOCH)authNotice('Não foi possível contactar o serviço. Mantém o teu e-mail e tenta novamente com internet.')}finally{if(AUTH_RESET_JOB===job)AUTH_RESET_JOB=null;if(epoch===SESSION_EPOCH&&button)button.disabled=false}
+}
+function openRecovery(session){
+ if(!session||!session.user){AUTH_RECOVERY=null;return authView('O link de recuperação não criou uma sessão válida. Pede um novo link para a tua conta existente.');}
+ AUTH_RECOVERY={epoch:SESSION_EPOCH,owner:session.user.id,busy:false};user=session.user;mode=null;KX_STATE=null;KS_STATE=null;
+ A.innerHTML=`<div class="gate"><div class="logo">₭</div><h1>Recuperar a tua conta</h1><p>A tua conta e os teus registos serão mantidos. Define apenas uma nova palavra-passe.</p><form data-f="recovery" class="panel" style="max-width:420px;margin:20px auto;text-align:left"><label for="recoveryPassword">Nova palavra-passe</label><input id="recoveryPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required><label for="recoveryConfirm">Repete a nova palavra-passe</label><input id="recoveryConfirm" type="password" autocomplete="new-password" minlength="8" maxlength="128" required><p id="recoveryStatus" role="status" aria-live="polite"></p><button class="primary" id="recoverySubmit">Guardar nova palavra-passe</button><button type="button" class="secondary" data-a="recovery-back">Voltar à entrada</button></form></div>`;
+}
+async function completeRecovery(){
+ const ctx=AUTH_RECOVERY;if(!ctx||ctx.busy||ctx.epoch!==SESSION_EPOCH||!user||user.id!==ctx.owner)return;
+ const status=$('#recoveryStatus'),p=$('#recoveryPassword'),q=$('#recoveryConfirm'),button=$('#recoverySubmit');
+ if(!p||!q)return;if(p.value.length<8||p.value.length>128)return status.textContent='Usa uma palavra-passe entre 8 e 128 caracteres.';if(p.value!==q.value)return status.textContent='As duas palavras-passe têm de ser iguais.';
+ ctx.busy=true;if(button)button.disabled=true;status.textContent='A guardar...';const current=()=>AUTH_RECOVERY===ctx&&ctx.epoch===SESSION_EPOCH&&user&&user.id===ctx.owner;
+ try{const r=await sb.auth.updateUser({password:p.value});if(!current())return;
+  if(r.error){status.textContent=/expired|jwt|session/i.test((r.error.code||'')+' '+(r.error.message||''))?'A sessão de recuperação terminou. Pede um novo link.':'Não foi possível alterar a palavra-passe. Tenta outra palavra-passe ou pede um novo link.';return}
+  p.value='';q.value='';AUTH_RECOVERY=null;resetSession();user=null;
+  try{await sb.auth.signOut({scope:'local'})}catch(e){}
+  authView('Palavra-passe atualizada. Entra com o mesmo e-mail e a nova palavra-passe. A conta e os registos foram mantidos.');
+ }catch(e){if(current())status.textContent='Falha de ligação. A alteração não foi confirmada. Tenta novamente.'}finally{ctx.busy=false;if(current()&&button)button.disabled=false}
+}
 async function init(){OFFV=false;
  if(!sb){A.innerHTML='<div class="gate"><div class="al bad">Não foi possível carregar a ligação à base de dados. Verifica a internet e recarrega a página.</div></div>';return}
  if(!navigator.onLine)return offlineView();
- let ses=null;try{ses=(await sb.auth.getSession()).data.session}catch(e){return offlineView()}
+ let ses=null,result;try{result=await sb.auth.getSession();ses=result.data&&result.data.session}catch(e){return authView('Não foi possível confirmar a sessão. Verifica a internet e tenta novamente.')}
+ if(AUTH_RECOVERY)return;
+ if(AUTH_LINK.error)return authView(AUTH_LINK.error==='otp_expired'?'O link expirou ou já foi utilizado. Pede uma nova recuperação para a tua conta existente.':'O link de autenticação falhou. Pede uma nova recuperação. A tua conta não foi apagada.');
+ if(AUTH_LINK.recovery)return openRecovery(ses);
+ if(result.error)return authView('Não foi possível validar a sessão. Pede um novo link se estás a recuperar a conta.');
  ses?await start(ses):authView()}
 new MutationObserver(netUI).observe(A,{childList:true});
 window.addEventListener("online",()=>{netUI();if(OFFV)return init();if(mode){if(PENDING){PENDING=false;save()}update();toast("Ligação reposta.")}});
 window.addEventListener("offline",()=>{netUI();if(mode)update()});
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();DEFERRED=e});
 window.addEventListener("appinstalled",()=>{DEFERRED=null;toast("Aplicação instalada.")});
-sb&&sb.auth.onAuthStateChange(ev=>{if(ev==="SIGNED_OUT"){resetSession();user=null;authView();return}if(ev==="PASSWORD_RECOVERY")setTimeout(async()=>{const p=prompt("Nova palavra-passe (mínimo 8 caracteres):");if(p&&p.length>=8){const r=await sb.auth.updateUser({password:p});toast(r.error?r.error.message:"Palavra-passe atualizada.")}},300)});
+sb&&sb.auth.onAuthStateChange((ev,session)=>{if(ev==="SIGNED_OUT"){AUTH_RECOVERY=null;resetSession();user=null;authView();return}if(ev==="PASSWORD_RECOVERY"){openRecovery(session);}});
 init();
 })();
 </script>
