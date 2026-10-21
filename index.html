@@ -178,7 +178,7 @@ async function kxEnter(kind){
   if(!kxDocument(kind,data))throw Error('Os dados desta área têm um formato diferente. Nada foi substituído.');
   const role=member.data&&member.data.role;
   if(!['admin','member','viewer'].includes(role))throw Error('Não foi possível confirmar o teu papel neste espaço.');
-  mode=null;KX_STATE={kind,ws,epoch,owner:user.id,data,role,busy:false,month:kxToday().slice(0,7),typeFilter:'all',query:'',largeText:false,draft:null,edit:null};if(typeof rememberArea==='function')rememberArea(kind);kxRender();
+  mode=null;KX_STATE={kind,ws,epoch,owner:user.id,data,role,busy:false,month:kxToday().slice(0,7),typeFilter:'all',query:'',largeText:false,draft:null,edit:null};if(typeof rememberArea==='function')rememberArea(kind);kxRender();if(typeof duOpenTop==='function')duOpenTop();
  }catch(e){if(current())toast(e.message||'Não foi possível abrir esta área.')}
 }
 async function kxPersist(ctx,data){
@@ -322,9 +322,9 @@ async function ksCreateSpace(title){
 
 function ksShell(body){const ctx=KS_STATE;A.innerHTML=`<div class="ks-area">${duHeader(KS_TITLES[ctx.kind])}<main>${duFab()}${body}</main><footer>Os registos privados permanecem privados. A partilha depende dos participantes aceites.</footer></div>`;ksBusy();duFinish()}
 
-function ksRenderHome(){if(KS_STATE)ksShell(ksHomeMarkup(KS_STATE))}
+function ksRenderHome(){if(KS_STATE){ksShell(ksHomeMarkup(KS_STATE));if(typeof duOpenTop==="function")duOpenTop()}}
 async function ksOpen(id){
- const ctx=KS_STATE;if(!ctx||ctx.busy)return;ctx.busy=true;ksBusy();
+ const ctx=KS_STATE;if(!ctx||ctx.busy)return;const opening=!ctx.group||ctx.group.id!==id;ctx.busy=true;ksBusy();
  try{
   const g=await sb.from('kamba_groups').select('*').eq('id',id).maybeSingle();if(!ksCurrent(ctx))return;
   if(g.error||!g.data||g.data.kind!==ctx.kind)throw Error('Espaço indisponível.');
@@ -339,7 +339,7 @@ async function ksOpen(id){
   if(role==='owner'){
    const [people,invites]=await Promise.all([ksCall('kamba_group_people',{p_group:id}),sb.from('kamba_group_invites').select('*').eq('group_id',id).eq('status','pending')]);if(!ksCurrent(ctx))return;if(invites.error)throw invites.error;ctx.people=people||[];ctx.pending=invites.data||[];if(ctx.kind==='intergenerational'&&ctx.auditReady&&active){try{const history=await ksCall('kamba_group_history',{p_group:id,p_before:null});if(!ksCurrent(ctx))return;ctx.history=Array.isArray(history)?history:[]}catch(e){ctx.historyError=true}}
   }
-  if(typeof rememberArea==='function')rememberArea(ctx.kind);wr('kamba-last-space:'+user.id+':'+ctx.kind,id);if(!ctx.hasOpened){ctx.scope=(ctx.people.length||role!=='owner')?'shared':'private';ctx.hasOpened=true}ctx.edit=null;ksRenderGroup();
+  if(typeof rememberArea==='function')rememberArea(ctx.kind);wr('kamba-last-space:'+user.id+':'+ctx.kind,id);if(!ctx.hasOpened){ctx.scope=(ctx.people.length||role!=='owner')?'shared':'private';ctx.hasOpened=true}ctx.edit=null;ksRenderGroup();if(opening&&typeof duOpenTop==="function")duOpenTop();
  }catch(e){if(ksCurrent(ctx)){ctx.group=null;ctx.rows=[];ksRenderHome();toast(e.message||'Não foi possível abrir o espaço.')}}
  finally{ctx.busy=false;if(ksCurrent(ctx))ksBusy()}
 }
@@ -499,6 +499,9 @@ async function duUploadSharedFile(file){const c=KS_STATE;if(!c||c.busy||c.demo||
 document.addEventListener('change',e=>{if(e.target.id==='du-group-file')duUploadSharedFile(e.target.files&&e.target.files[0])});
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-du]'),c=KS_STATE;if(!b||!c||!c.group||c.busy)return;const action=b.dataset.du;if(action==='upload-file')return $('#du-group-file').click();if(!['open-file','hide-file'].includes(action))return;const f=(c.files||[]).find(x=>x.id===b.dataset.id);if(!f)return;if(action==='hide-file'){if(!confirm('Mover este ficheiro para arquivo? Deixará de aparecer nos documentos ativos.'))return;try{await ksCall('kamba_hide_group_file',{p_file:f.id});await duSharedFiles()}catch(e){toast(e.message)}return}const r=await sb.storage.from('kamba-shared-docs').createSignedUrl(f.path,60,{download:f.name});if(!ksCurrent(c))return;if(r.error)return toast('Não foi possível abrir o ficheiro.');const m=$('#md');m.innerHTML=`<div class="mbox"><h2>${esc(f.name)}</h2><a class="primary" href="${esc(r.data.signedUrl)}" target="_blank" rel="noopener">Abrir / descarregar ficheiro</a><p class="mu">A ligação expira em 60 segundos.</p><button class="secondary" data-a="mclose">Fechar</button></div>`});
 
+// Só na abertura de uma área/espaço; editar, repetir e navegar preservam o scroll.
+function duOpenTop(){const root=document.scrollingElement||document.documentElement;if(root){root.scrollTop=0;root.scrollLeft=0}if(typeof window.scrollTo==='function')window.scrollTo({top:0,left:0,behavior:'instant'})}
+
 /* Equipa por conta, não por aparelho. Mantém o painel empresarial existente. */
 let BT_CTX=null,BT_HOME=null,BT_SEQ=0;
 async function btRpc(name,args={}){const r=await sb.rpc(name,args);if(r.error)throw Error(r.error.message||'Operação recusada.');return r.data}
@@ -516,7 +519,7 @@ async function btEnter(home=false){
  btHomeRender();
  }catch(e){if(!btHomeCurrent(h))return;if(/kamba_collaboration_status|PGRST202|function.*not.*exist|schema cache/i.test(e.message))return enter('business',true);toast(e.message||'Não foi possível consultar as empresas.');btHomeRender()}
 }
-function btHomeRender(){const h=BT_HOME;if(!h||!btHomeCurrent(h))return;mode=null;KX_STATE=null;KS_STATE=null;A.innerHTML=`${duHeader('Empresarial — equipas')}<main><h2>As minhas empresas e convites</h2><p>Uma equipa tem até 10 contas: o titular e 9 convidados. A mesma conta pode entrar em vários aparelhos; isto não é um controlo remoto dos aparelhos.</p>${h.spaces.map(w=>`<section class="panel"><h3>${esc(w.name)}</h3><p>${w.role==='owner'?'Sou titular':w.role==='viewer'?'Acesso de consulta':'Membro com edição'} · ${w.active?'Plano do titular ativo':'Plano do titular inativo'}</p><button class="primary" data-bt="open" data-id="${esc(w.id)}">Abrir empresa</button></section>`).join('')}<button class="secondary" data-bt="create">Criar a minha empresa</button><section class="panel"><h3>Convites recebidos</h3>${h.invites.map(i=>`<article class="tx"><div><strong>${esc(i.name)}</strong><p>De ${esc(i.email)} · ${i.role==='viewer'?'Consulta':'Edição dos dados da empresa'}</p><p>Ao aceitar, os teus registos nesta empresa ficam visíveis à equipa e identificados no histórico do titular. Os teus outros planos permanecem separados.</p><button class="primary" data-bt="accept" data-id="${esc(i.id)}">Aceitar</button> <button class="secondary" data-bt="decline" data-id="${esc(i.id)}">Recusar</button></div></article>`).join('')||'<p>Sem convites pendentes.</p>'}</section><button class="secondary" data-bt="home">Atualizar empresas e convites</button></main>`;document.querySelectorAll('header [data-a]').forEach(b=>{if(['notes','mydocs','relatorio','exp','imp'].includes(b.dataset.a))b.disabled=true});netUI()}
+function btHomeRender(){const h=BT_HOME;if(!h||!btHomeCurrent(h))return;mode=null;KX_STATE=null;KS_STATE=null;A.innerHTML=`${duHeader('Empresarial — equipas')}<main><h2>As minhas empresas e convites</h2><p>Uma equipa tem até 10 contas: o titular e 9 convidados. A mesma conta pode entrar em vários aparelhos; isto não é um controlo remoto dos aparelhos.</p>${h.spaces.map(w=>`<section class="panel"><h3>${esc(w.name)}</h3><p>${w.role==='owner'?'Sou titular':w.role==='viewer'?'Acesso de consulta':'Membro com edição'} · ${w.active?'Plano do titular ativo':'Plano do titular inativo'}</p><button class="primary" data-bt="open" data-id="${esc(w.id)}">Abrir empresa</button></section>`).join('')}<button class="secondary" data-bt="create">Criar a minha empresa</button><section class="panel"><h3>Convites recebidos</h3>${h.invites.map(i=>`<article class="tx"><div><strong>${esc(i.name)}</strong><p>De ${esc(i.email)} · ${i.role==='viewer'?'Consulta':'Edição dos dados da empresa'}</p><p>Ao aceitar, os teus registos nesta empresa ficam visíveis à equipa e identificados no histórico do titular. Os teus outros planos permanecem separados.</p><button class="primary" data-bt="accept" data-id="${esc(i.id)}">Aceitar</button> <button class="secondary" data-bt="decline" data-id="${esc(i.id)}">Recusar</button></div></article>`).join('')||'<p>Sem convites pendentes.</p>'}</section><button class="secondary" data-bt="home">Atualizar empresas e convites</button></main>`;document.querySelectorAll('header [data-a]').forEach(b=>{if(['notes','mydocs','relatorio','exp','imp'].includes(b.dataset.a))b.disabled=true});netUI();duOpenTop()}
 async function btCreate(){const h=BT_HOME;if(!h||h.busy)return;entCalc();if(!ENT.business)return payOpen();h.busy=true;try{const id=uid(),r=await sb.from('workspaces').insert({id,kind:'business',name:'Empresa'});if(r.error)throw r.error;if(btHomeCurrent(h))await btOpen(id)}catch(e){if(btHomeCurrent(h))toast(e.message)}finally{h.busy=false}}
 async function btOpen(id){
  const epoch=SESSION_EPOCH,account=user.id,seq=++BT_SEQ;
@@ -524,7 +527,7 @@ async function btOpen(id){
  try{const ua=navigator.userAgent||'',device=/ipad|tablet/i.test(ua)?'tablet':/mobile|android|iphone/i.test(ua)?'telemóvel':'computador';const r=await btRpc('kamba_team_open',{p_ws:id,p_device:device});if(epoch!==SESSION_EPOCH||account!==user?.id||seq!==BT_SEQ)return;
  ++ENTER_SEQ;KX_STATE=null;KS_STATE=null;WS.business=id;mode='business';BT_CTX={...r,epoch,account,id,base:r.data,rev:r.rev,pending:0,busy:false,blocked:false,chain:Promise.resolve(),report:null,cursor:null};
  S=Object.assign(def('business'),r.data||{});for(const k of ['prod','sales','exp','purchases','suppliers','customers','docs','notes'])if(!Array.isArray(S[k]))S[k]=[];S.prefs=Object.assign({hide:[],order:[],moveSize:'normal'},S.prefs||{});S.biz=S.biz||{};BT_CTX.base=JSON.parse(JSON.stringify(S));
- tab='sales';ed=null;fl={q:'',t:'all'};rememberArea('business');wr('kamba-team-last:'+account,id);wr(stateKey(),S);shell();btStatus();
+ tab='sales';ed=null;fl={q:'',t:'all'};rememberArea('business');wr('kamba-team-last:'+account,id);wr(stateKey(),S);shell();btStatus();duOpenTop();
  const draft=rd(btDraftKey(BT_CTX));if(draft)toast('Existe um rascunho local anterior. Exporta-o em Equipa antes de o remover.');
  }catch(e){if(epoch===SESSION_EPOCH&&account===user?.id){BT_CTX=null;mode=null;S=null;A.innerHTML='';toast(e.message);await btEnter(true)}}
 }
@@ -578,7 +581,7 @@ const KAMBA_LOGO_SRC='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYA
 const SB_URL="https://cqbvwjtgilnsnnplnbbr.supabase.co",SB_KEY="sb_publishable_IST8t394Xz3XF0pAAP-Xig_c3OPhqWd";
 const AUTH_LINK=authLinkState(location.href);
 const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;
-const APP_BUILD="2026.10.21.equipa25";
+const APP_BUILD="2026.10.22.topo";
 let DIAG_SEQ=0,DIAG_REPORT=null;
 let SYNCING=0,PENDING=false,OFFV=false,DEFERRED=null,UPDW=null,UPD=false;
 let SESSION_EPOCH=0,ENTER_SEQ=0,SERVER_READY=["personal","business"],SERVER_IMPLEMENTED=[],COMMERCE_READY=false,TRANSFER_AVAILABLE=false,ADMIN_TEST_ACCESS=false,ALL_PLAN_ACCESS=false;
@@ -694,7 +697,7 @@ async function enter(m,legacyBusiness=false){
  if(!S)S=def(m);
  if(m==="business"){S.docs=S.docs||[];S.biz=S.biz||{};S.prod=S.prod||[];S.sales=S.sales||[];S.exp=S.exp||[];S.purchases=Array.isArray(S.purchases)?S.purchases:[];S.suppliers=Array.isArray(S.suppliers)?S.suppliers:[];S.customers=Array.isArray(S.customers)?S.customers:[]}else{S.tx=S.tx||[];S.bud=S.bud||{}}
  S.notes=Array.isArray(S.notes)?S.notes:[];S.profilePhoto=typeof S.profilePhoto==="string"?S.profilePhoto:"";S.members=Array.isArray(S.members)?S.members:[];S.prefs=Object.assign({hide:[],order:[],moveSize:"normal"},S.prefs||{});if(m==="personal")S.goal=Object.assign({target:0,saved:0,monthly:0,deadline:"",hist:[]},S.goal||{});
- tab="sales";fl={q:"",t:"all"};shell();if(!cloud)save();
+ tab="sales";fl={q:"",t:"all"};shell();if(typeof duOpenTop==="function")duOpenTop();if(!cloud)save();
 }
 function shell(){
  A.innerHTML=`${duHeader(mode==="personal"?"Particular / Família":"Empresarial")}
