@@ -496,7 +496,7 @@ const KAMBA_LOGO_SRC='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYA
 const SB_URL="https://cqbvwjtgilnsnnplnbbr.supabase.co",SB_KEY="sb_publishable_IST8t394Xz3XF0pAAP-Xig_c3OPhqWd";
 const AUTH_LINK=authLinkState(location.href);
 const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;
-const APP_BUILD="2026.10.21.pagamentos1";
+const APP_BUILD="2026.10.21.pagamentos2";
 let DIAG_SEQ=0,DIAG_REPORT=null;
 let SYNCING=0,PENDING=false,OFFV=false,DEFERRED=null,UPDW=null,UPD=false;
 let SESSION_EPOCH=0,ENTER_SEQ=0,SERVER_READY=["personal","business"],SERVER_IMPLEMENTED=[],COMMERCE_READY=false,TRANSFER_AVAILABLE=false,ADMIN_TEST_ACCESS=false,ALL_PLAN_ACCESS=false;
@@ -880,7 +880,7 @@ function texp(kind){const{d,vis,rows}=tblData(),H=vis.map(c=>c[1]),R=rows.map(r=
  if(kind==="xlsx")return loadXlsx().then(()=>{const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([H,...R]),"Dados");XLSX.writeFile(wb,"kamba-"+TB.ds+".xlsx")}).catch(()=>toast("Não foi possível carregar o exportador de Excel (precisa de internet na primeira vez). Usa o CSV."));
  const cell=v=>{if(typeof v==="number")return String(v);let t=String(v==null?"":v);if(/^[=+\-@\t\r]/.test(t))t="'"+t;return '"'+t.replace(/"/g,'""')+'"'};
  dl(new Blob(["\ufeff"+[H,...R].map(r=>r.map(cell).join(";")).join("\r\n")],{type:"text/csv;charset=utf-8"}),"kamba-"+TB.ds+".csv")}
-const PAY_VIEW={epoch:-1,page:0,filter:'all',more:false,rows:[],seq:0};
+const PAY_VIEW={epoch:-1,page:0,filter:'all',more:false,rows:[],seq:0,draft:null};
 function payHiddenKey(){return user&&user.id?'kamba-hidden-requests:'+user.id:null}
 function payHiddenIds(){const key=payHiddenKey(),v=key?rd(key):null;return new Set(Array.isArray(v)?v.filter(x=>typeof x==='string'&&x.length<=64).slice(-2000):[])}
 function payHideRequest(id){const row=PAY_VIEW.rows.find(r=>r.id===id);if(!row||!['cancelled','expired','rejected','failed'].includes(effSt(row)))return toast('Só podes ocultar pedidos cancelados ou encerrados sem pagamento.');const ids=payHiddenIds();ids.add(id);if(!wr(payHiddenKey(),[...ids].slice(-2000)))return toast('Não foi possível guardar a preferência neste dispositivo.');return payOpen()}
@@ -895,7 +895,7 @@ const PTv=c=>PL[c]&&PL[c].price?Number(PL[c].price):0;
 const instAmt=(pl,n,k)=>{const t=PTv(pl),b=Math.floor(t/n);return k===n?t-b*(n-1):b};
 function prevInst(){const e=$("#pi");if(!e)return;const pl=$("#pl").value,n=+$("#pn2").value;e.textContent=n===1?"Pagamento único: "+money(instAmt(pl,1,1)):n+" prestações de "+money(instAmt(pl,n,1))+", a última de "+money(instAmt(pl,n,n))+" (total "+money(PTv(pl))+", sem juros)."}
 const ERRBOX='<div style="max-width:720px;margin:0 auto"><div class="al bad">Não foi possível carregar. Já executaste as migrações 004 a 006 no Supabase?</div><button class="primary" data-a="tclose">Fechar</button></div>';
-async function payOpen(){if((typeof KX_STATE!=="undefined"&&KX_STATE&&KX_STATE.busy)||(typeof KS_STATE!=="undefined"&&KS_STATE&&KS_STATE.busy))return toast("Aguarda que a operação termine antes de mudar de área.");const epoch=SESSION_EPOCH;if(PAY_VIEW.epoch!==epoch){PAY_VIEW.epoch=epoch;PAY_VIEW.page=0;PAY_VIEW.filter='all';PAY_VIEW.rows=[]}const seq=++PAY_VIEW.seq;const t=$("#tv");t.hidden=false;t.innerHTML='<div style="max-width:720px;margin:0 auto"><p class="mu">A carregar...</p></div>';
+async function payOpen(){if((typeof KX_STATE!=="undefined"&&KX_STATE&&KX_STATE.busy)||(typeof KS_STATE!=="undefined"&&KS_STATE&&KS_STATE.busy))return toast("Aguarda que a operação termine antes de mudar de área.");const epoch=SESSION_EPOCH;if(PAY_VIEW.epoch!==epoch){PAY_VIEW.epoch=epoch;PAY_VIEW.page=0;PAY_VIEW.filter='all';PAY_VIEW.rows=[];PAY_VIEW.draft=null}else if($('#pl')&&$('#pn2')){PAY_VIEW.draft={plan:$('#pl').value,n:$('#pn2').value}}const seq=++PAY_VIEW.seq;const t=$("#tv");t.hidden=false;t.innerHTML='<div style="max-width:720px;margin:0 auto"><p class="mu">A carregar...</p></div>';
  let query=sb.from("payment_requests").select("*").order("created_at",{ascending:false}).order("id",{ascending:false});query=PAY_VIEW.filter==='cancelled'?query.eq('status','cancelled'):query.neq('status','cancelled');query=query.range(PAY_VIEW.page*20,PAY_VIEW.page*20+20);
  let results;try{results=await Promise.all([sb.from("subscriptions").select("*"),loadPlans(),query,sb.rpc("is_admin")])}catch(e){if(epoch===SESSION_EPOCH){resetAccess();t.innerHTML=ERRBOX}return}
  const[a,plansResult,b,ad]=results;
@@ -918,7 +918,18 @@ async function payOpen(){if((typeof KX_STATE!=="undefined"&&KX_STATE&&KX_STATE.b
  <section class="panel" style="margin-top:14px"><h3>Planos, preços e o que inclui</h3><div class="modes" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin:8px 0 0">${plansH}</div><div class="note" style="margin-top:12px"><strong>Vantagens e limitações:</strong> os planos marcados «Em integração» são apresentados para deixar visíveis os preços e a oferta planeada, mas ainda não podem ser comprados. O servidor e as regras de acesso têm de ser atualizados antes de ativar esses planos. Particular/Família não inclui vendas ou stock; Empresarial não inclui a área familiar. Os documentos empresariais atuais são internos, não são faturas fiscais válidas em Angola.</div><button class="secondary full" style="min-height:46px;margin-top:10px" data-a="cloudhelp">☁️ Ler política de privacidade e segurança</button></section>
  <section class="panel" style="margin-top:14px"><h3>Nova compra ou renovação anual (até 12 prestações)</h3>${sel}${cards}<div class="modes" style="margin-top:14px"><div class="panel">${paymentBrand('mcx')}<strong>MULTICAIXA Express</strong><p>Integração automática por configurar. Não emite entidade/referência nesta versão.</p></div><div class="panel">${paymentBrand('paypay')}<strong>PayPay</strong><p>Recebimento manual quando configurado. Integração automática por configurar.</p></div><div class="panel">${paymentBrand('kwik')}<strong>KWiK</strong><p>Recebimento por número quando configurado, com confirmação manual. Integração automática por configurar.</p></div></div><p class="mu" style="font-size:12px">Os dados bancários só são mostrados depois de criares a cobrança. Nunca envies PINs, palavras-passe nem códigos de autenticação.</p></section>
  ${continued?`<section class="panel" style="margin-top:14px"><h3>Continuar compras em prestações</h3>${continued}</section>`:""}<section class="panel" style="margin-top:14px"><h3>Os teus pedidos</h3><div class="row2"><button class="secondary" data-a="pfilter" data-filter="all">Ativos e histórico</button><button class="secondary" data-a="pfilter" data-filter="cancelled">Cancelados</button><button class="secondary small" data-a="prestore">Repor pedidos ocultados</button></div><p class="mu">${PAY_VIEW.filter==='cancelled'?'Cancelados':'Ativos e histórico sem cancelados'} · Página ${PAY_VIEW.page+1} · Até 20 pedidos por página. Retirar da lista oculta neste dispositivo; não elimina o histórico financeiro.</p>${list}<div class="row2"><button class="secondary" data-a="pprev" ${PAY_VIEW.page?'':'disabled'}>Anterior</button><button class="secondary" data-a="pnext" ${PAY_VIEW.more?'':'disabled'}>Seguinte</button></div></section></div>`;
+ const draft=PAY_VIEW.draft;const chosen=availablePlans.some(p=>p.code===draft?.plan)?draft.plan:(availablePlans[0]?.code||'');const count=draft&&Number.isInteger(+draft.n)&&+draft.n>=1&&+draft.n<=12?String(+draft.n):'1';if($('#pl'))$('#pl').value=chosen;if($('#pn2'))$('#pn2').value=count;PAY_VIEW.draft={plan:chosen,n:count};
  prevInst()}
+const PAY_CANCEL_BUSY=new Set();
+async function payCancel(id){
+ const epoch=SESSION_EPOCH,owner=user?.id,key=epoch+':'+id;
+ if(!owner||PAY_CANCEL_BUSY.has(key)||!PAY_VIEW.rows.some(r=>r.id===id&&effSt(r)==='pending'))return;
+ if(!confirm('Cancelar esta cobrança?'))return;
+ PAY_CANCEL_BUSY.add(key);
+ try{const r=await sb.rpc('cancel_payment',{p_id:id});if(epoch!==SESSION_EPOCH||user?.id!==owner)return;if(r.error)return toast(r.error.message);toast('Cobrança cancelada.');await payOpen()}
+ catch(e){if(epoch===SESSION_EPOCH&&user?.id===owner)toast('Não foi possível confirmar o cancelamento. Atualiza os pedidos antes de tentar novamente.')}
+ finally{PAY_CANCEL_BUSY.delete(key)}
+}
 let PAYMENT_BUSY=null;
 async function purchaseRequest(pl,n,gid){
  if(PAYMENT_BUSY&&PAYMENT_BUSY.epoch===SESSION_EPOCH)return;
@@ -1271,7 +1282,7 @@ document.addEventListener("click",e=>{
  if(a==="pclaim")return pclaim();
  if(a==="mclose"){$("#md").hidden=true;$("#md").innerHTML="";return}
  if(a==="pcopy"){return(navigator.clipboard?navigator.clipboard.writeText(id).then(()=>toast("Copiado."),()=>toast("Não foi possível copiar. Seleciona o texto.")):toast("Não foi possível copiar. Seleciona o texto."))}
- if(a==="pcan"){if(!confirm("Cancelar esta cobrança?"))return;sb.rpc("cancel_payment",{p_id:id}).then(r=>{toast(r.error?r.error.message:"Cobrança cancelada.");payOpen()});return}
+ if(a==="pcan")return payCancel(id);
  if(a==="padm")return padm();
  if(a==="asave")return savePlan(id);
  if(a==="fixquote")return fixQuote(id);
