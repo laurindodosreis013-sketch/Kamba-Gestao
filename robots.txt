@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://kamba-gestao.kamba-gestaopagesdev.workers.dev/sitemap.xml
