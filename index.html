@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt">
+<html lang="pt-AO">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -9,7 +9,17 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Kamba"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <!-- Usa as fontes locais do dispositivo; dispensa pedidos ao Google Fonts. -->
-<title>Kamba Gestão</title>
+<title>Kamba Gestão — Gestão financeira pessoal e empresarial em Angola</title>
+<meta name="description" content="Organiza receitas, despesas, orçamentos e objetivos em kwanzas com o Kamba Gestão. Áreas para finanças pessoais, família, casais e pequenos negócios em Angola.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://kamba-gestao.kamba-gestaopagesdev.workers.dev/">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="pt_AO">
+<meta property="og:site_name" content="Kamba Gestão">
+<meta property="og:title" content="Kamba Gestão — Gestão financeira pessoal e empresarial em Angola">
+<meta property="og:description" content="Organiza receitas, despesas, orçamentos e objetivos em kwanzas com o Kamba Gestão. Áreas para finanças pessoais, família, casais e pequenos negócios em Angola.">
+<meta property="og:url" content="https://kamba-gestao.kamba-gestaopagesdev.workers.dev/">
+
 <style>
 :root{--g:#176b55;--g2:#e7f4ee;--on:#fff;--ink:#18221e;--mu:#65716b;--ln:#e1e8e3;--bg:#f5f8f6;--wh:#fff;--rd:#b42318;--rd2:#fff0ef;--am:#fff8e7;--amt:#77520b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media(prefers-color-scheme:dark){:root:not([data-theme=light]){--g:#4cc9a1;--g2:#173a30;--on:#0f1613;--ink:#e8efeb;--mu:#9aa8a1;--ln:#2a3731;--bg:#0f1613;--wh:#18221e;--rd:#ff8a80;--rd2:#3a1b19;--am:#3a2f12;--amt:#f2cf7a;color-scheme:dark}}
@@ -105,6 +115,8 @@ textarea{width:100%;border:1px solid var(--ln);border-radius:10px;padding:11px 1
 
 
 .mode .ico{font-size:28px!important;line-height:1.2;margin-bottom:8px}
+
+.public-info{max-width:1000px;margin:0 auto;padding:40px 18px 20px}.public-info[hidden]{display:none}.public-intro{max-width:760px}.public-info h1{font-size:clamp(26px,5vw,40px);line-height:1.15;margin:12px 0}.public-info p{line-height:1.65}.public-info .public-kicker{font-weight:700;color:var(--g);margin:0}.public-features{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:24px 0}.public-features article{background:var(--wh);border:1px solid var(--ln);border-radius:14px;padding:18px}.public-features h2{font-size:18px;margin:0 0 8px}.public-features p{margin:0;font-size:14px}.public-enter{display:inline-block;background:var(--g);color:var(--on);padding:13px 20px;border-radius:10px;text-decoration:none;font-weight:700}.public-info .public-note{font-size:13px;color:var(--mu)}
 </style>
 <style>
 .kx-area main{max-width:1100px;margin:auto;padding:24px 16px}.kx-area .panel strong{font-size:1.4em}.kx-area .tb strong{font-size:1em}.kx-area .tb small{display:block;margin-top:6px}.kx-area .ta{min-width:140px}.kx-area .ta button{margin:6px 0 0 6px}.kx-area form button{min-height:48px}.kx-area input,.kx-area select{max-width:100%}.kx-senior{font-size:20px;line-height:1.6}.kx-senior button,.kx-senior input,.kx-senior select{font-size:20px;min-height:56px}.kx-senior h1{font-size:1.4em}.kx-senior h2{font-size:1.35em}.kx-senior label{font-size:1em;font-weight:700}.kx-senior small,.kx-senior .mu{font-size:.95em}.kx-senior .tx{padding:18px 0}.kx-area button:focus-visible,.kx-area input:focus-visible,.kx-area select:focus-visible{outline:3px solid #d97706;outline-offset:3px}@media(max-width:640px){.kx-area header{align-items:flex-start;flex-direction:column}.kx-area .hb{width:100%;display:flex;flex-wrap:wrap}.kx-area .tx{align-items:flex-start;gap:12px;flex-wrap:wrap}.kx-area .cards{grid-template-columns:1fr}.kx-senior .fg{grid-template-columns:1fr}.kx-area .ta{width:100%;text-align:left}.kx-area .row2{flex-wrap:wrap}}
@@ -123,6 +135,11 @@ textarea{width:100%;border:1px solid var(--ln);border-radius:10px;padding:11px 1
 </style>
 </head>
 <body>
+<section id="public-info" class="public-info" aria-labelledby="public-title">
+<div class="public-intro"><p class="public-kicker">KAMBA GESTÃO · ANGOLA</p><h1 id="public-title">O teu dinheiro e o teu negócio, mais organizados.</h1><p>O <strong>Kamba Gestão</strong> é uma aplicação de gestão financeira para organizar receitas, despesas, orçamentos e objetivos, com valores em <strong>kwanzas (Kz)</strong>. Acompanha as finanças pessoais, familiares e de pequenos negócios em Angola.</p><a class="public-enter" href="#app">Entrar ou criar conta</a></div>
+<div class="public-features"><article><h2>Finanças pessoais e familiares</h2><p>Regista entradas e despesas, acompanha o saldo, organiza categorias e consulta resumos e gráficos.</p></article><article><h2>Gestão do teu negócio</h2><p>Organiza produtos, stock, vendas, despesas e valores a receber no Kamba Empresarial.</p></article><article><h2>Organização em diferentes fases da vida</h2><p>Conhece as áreas Kamba Casais, Meu Kamba Mais Velho, Meu Kamba Raiz e Meu Kamba Intergeracional.</p></article></div>
+<p>Consulta os planos, funcionalidades e condições dentro da aplicação. Podes utilizar o Kamba Gestão no computador ou no telemóvel, com ligação à internet.</p><p class="public-note">Esta apresentação é pública. Para consultar ou guardar os dados de uma conta, é necessário entrar nessa conta e ter as permissões correspondentes.</p><noscript><p>A apresentação pode ser consultada sem JavaScript. Para entrar na aplicação e utilizar as ferramentas de gestão, ativa o JavaScript no navegador.</p></noscript>
+</section>
 <div id="app"></div>
 <div class="toast" id="toast" role="status"></div>
 <div id="pv" hidden></div><div id="tv" hidden></div><div id="md" hidden></div>
@@ -581,7 +598,7 @@ const KAMBA_LOGO_SRC='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYA
 const SB_URL="https://cqbvwjtgilnsnnplnbbr.supabase.co",SB_KEY="sb_publishable_IST8t394Xz3XF0pAAP-Xig_c3OPhqWd";
 const AUTH_LINK=authLinkState(location.href);
 const sb=window.supabase?window.supabase.createClient(SB_URL,SB_KEY):null;
-const APP_BUILD="2026.10.22.topo";
+const APP_BUILD="2026.10.22.google";
 let DIAG_SEQ=0,DIAG_REPORT=null;
 let SYNCING=0,PENDING=false,OFFV=false,DEFERRED=null,UPDW=null,UPD=false;
 let SESSION_EPOCH=0,ENTER_SEQ=0,SERVER_READY=["personal","business"],SERVER_IMPLEMENTED=[],COMMERCE_READY=false,TRANSFER_AVAILABLE=false,ADMIN_TEST_ACCESS=false,ALL_PLAN_ACCESS=false;
@@ -664,6 +681,7 @@ function orderedAreas(){
 function orderGateMarkup(markup){const re=/<button class="mode" data-a="mode" data-m="([^"]+)">[\s\S]*?<\/button>/g,buttons=new Map([...markup.matchAll(re)].map(x=>[x[1],x[0]])),ordered=orderedAreas().filter(x=>buttons.has(x));let i=0;return markup.replace(re,()=>buttons.get(ordered[i++]))}
 function gate(){if(typeof btHasDraft==="function"&&btHasDraft())return toast("Resolve primeiro a gravação empresarial pendente.");if(typeof btReset==="function")btReset();if((typeof KX_STATE!=="undefined"&&KX_STATE&&KX_STATE.busy)||(typeof KS_STATE!=="undefined"&&KS_STATE&&KS_STATE.busy))return toast("Aguarda que a operação termine antes de mudar de área.");
  ENTER_SEQ++;mode=null;if(typeof KX_STATE!=="undefined")KX_STATE=null;if(typeof KS_STATE!=="undefined")KS_STATE=null;
+ const intro=$("#public-info");if(intro)intro.hidden=true;
  const has=m=>!!WS[m];
  A.innerHTML=orderGateMarkup(`<div class="gate"><div class="logo"><img src="${KAMBA_LOGO_SRC}" alt="Logótipo Kamba Gestão" width="192" height="192"></div><h1>Kamba Gestão</h1><p class="mu">Como vais usar a aplicação?</p><p><span class="net st ok" role="status" aria-live="polite"></span></p><p class="mu" style="margin:8px 0 0">Conta: ${esc(user.email)}</p>${ADMIN_TEST_ACCESS?'<p class="note">Administrador: acesso a todas as áreas para testar nos teus próprios espaços, sem compra de plano.</p>':""}<div class="gate-actions"><button class="secondary" data-a="profile">👤 Perfil</button><button class="secondary" data-a="inst">📲 Instalar aplicação</button><button class="danger" data-a="out">↪ Sair da conta</button></div>
  <div class="modes">
@@ -1477,7 +1495,7 @@ document.addEventListener("click",e=>{
   if(k==="sale"){const s=S.sales.find(x=>x.id===id),p=s&&S.prod.find(x=>x.id===s.pid);if(p){if(!safeWhole(p.stock)||!safeWhole(s.qty,1)||!safeWhole(p.stock+s.qty))return toast("Não é seguro repor este stock. Verifica o produto e a venda.");p.stock+=s.qty}S.sales=S.sales.filter(x=>x.id!==id);body()}
   save();update();toast("Registo apagado.")}
 });
-function authView(msg){A.innerHTML=`<div class="gate"><div class="logo"><img src="${KAMBA_LOGO_SRC}" alt="Logótipo Kamba Gestão" width="192" height="192"></div><h1>Kamba Gestão</h1><p class="mu">Entra ou cria a tua conta</p>
+function authView(msg){const intro=$("#public-info");if(intro)intro.hidden=false;A.innerHTML=`<div class="gate"><div class="logo"><img src="${KAMBA_LOGO_SRC}" alt="Logótipo Kamba Gestão" width="192" height="192"></div><h1>Kamba Gestão</h1><p class="mu">Entra ou cria a tua conta</p>
 <div id="authNotice" role="status" aria-live="polite"></div><form data-f="auth" class="panel" style="max-width:380px;margin:22px auto;text-align:left"><div class="field"><label for="em">E-mail</label><input id="em" type="email" autocomplete="email" required></div><div class="field" style="margin-top:12px"><label for="pw">Palavra-passe (mínimo 8 caracteres)</label><input id="pw" type="password" autocomplete="current-password" minlength="8" required></div>
 <div class="field"><label for="signupSex">Sexo (ao criar conta)</label><select id="signupSex"><option value="">Selecionar</option><option value="male">Masculino</option><option value="female">Feminino</option></select></div><div class="row2"><button class="primary" style="flex:1">Entrar</button><button class="secondary" style="flex:1" type="button" data-a="signup">Criar conta</button></div><div class="row2"><button type="button" class="secondary small" data-a="reset">Esqueci a palavra-passe</button></div>${msg?`<div class="al warn" style="margin-top:12px" role="alert">${esc(msg)}</div>`:""}</form><p><span class="net st ok" role="status" aria-live="polite"></span> <button class="secondary small" type="button" data-a="inst">Como instalar a aplicação</button></p></div>`}
 async function doAuth(k){
@@ -1523,7 +1541,7 @@ function entCalc(){
  }
 }
 async function start(session){
- resetSession();user=session.user;const epoch=SESSION_EPOCH;
+ resetSession();user=session.user;const intro=$("#public-info");if(intro)intro.hidden=true;const epoch=SESSION_EPOCH;
  try{
   const[w,sp,plans]=await Promise.all([sb.from("workspaces").select("id,kind"),sb.from("subscriptions").select("*"),loadPlans()]);
   if(epoch!==SESSION_EPOCH)return;
@@ -1569,7 +1587,7 @@ async function sendRecovery(){
   authNotice('Pedido aceite. Se existir uma conta com este e-mail, receberás instruções. Abre apenas o e-mail mais recente. Não precisas de criar outra conta.');
  }catch(e){if(epoch===SESSION_EPOCH)authNotice('Não foi possível contactar o serviço. Mantém o teu e-mail e tenta novamente com internet.')}finally{if(AUTH_RESET_JOB===job)AUTH_RESET_JOB=null;if(epoch===SESSION_EPOCH&&button)button.disabled=false}
 }
-function openRecovery(session){
+function openRecovery(session){const intro=$("#public-info");if(intro)intro.hidden=true;
  if(!session||!session.user){AUTH_RECOVERY=null;return authView('O link de recuperação não criou uma sessão válida. Pede um novo link para a tua conta existente.');}
  AUTH_RECOVERY={epoch:SESSION_EPOCH,owner:session.user.id,busy:false};user=session.user;mode=null;KX_STATE=null;KS_STATE=null;
  A.innerHTML=`<div class="gate"><div class="logo"><img src="${KAMBA_LOGO_SRC}" alt="Logótipo Kamba Gestão" width="192" height="192"></div><h1>Recuperar a tua conta</h1><p>A tua conta e os teus registos serão mantidos. Define apenas uma nova palavra-passe.</p><form data-f="recovery" class="panel" style="max-width:420px;margin:20px auto;text-align:left"><label for="recoveryPassword">Nova palavra-passe</label><input id="recoveryPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required><label for="recoveryConfirm">Repete a nova palavra-passe</label><input id="recoveryConfirm" type="password" autocomplete="new-password" minlength="8" maxlength="128" required><p id="recoveryStatus" role="status" aria-live="polite"></p><button class="primary" id="recoverySubmit">Guardar nova palavra-passe</button><button type="button" class="secondary" data-a="recovery-back">Voltar à entrada</button></form></div>`;
